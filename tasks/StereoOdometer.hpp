@@ -3,15 +3,26 @@
 #ifndef VISO2_STEREOODOMETER_TASK_HPP
 #define VISO2_STEREOODOMETER_TASK_HPP
 
+#include <memory.h>
 #include "viso2/StereoOdometerBase.hpp"
 
 /** Boost **/
 #include <boost/shared_ptr.hpp> /** For shared pointers **/
+#include <boost/circular_buffer.hpp> /** For circular buffers **/
 
 /** LibViso2 includes **/
+#include <viso2/matrix.h>
 #include <viso2/viso_stereo.h>
 
 namespace viso2 {
+
+    struct StereoPair
+    {
+        base::Time time;
+        ::base::samples::frame::Frame left;
+        ::base::samples::frame::Frame right;
+        uint32_t id;	
+    };
 
     /** Inport samples arrived ON/OFF flags **/
     struct FlagInputPorts
@@ -62,12 +73,17 @@ namespace viso2 {
         FlagInputPorts flag;
 
         boost::shared_ptr<VisualOdometryStereo> viso; /** Pointer to Viso2 object **/
-
-        ::RTT::extras::ReadOnlyPointer< ::base::samples::frame::Frame > left_image; /** current left image **/
-        ::RTT::extras::ReadOnlyPointer< ::base::samples::frame::Frame > right_image; /** current right image**/
+        boost::circular_buffer<StereoPair> imagePair; /** Left and right images **/
 
         virtual void left_frameCallback(const base::Time &ts, const ::RTT::extras::ReadOnlyPointer< ::base::samples::frame::Frame > &left_frame_sample);
         virtual void right_frameCallback(const base::Time &ts, const ::RTT::extras::ReadOnlyPointer< ::base::samples::frame::Frame > &right_frame_sample);
+
+        /***************************/
+        /** Output Port Variables **/
+        /***************************/
+        Matrix pose;/** viso2 matrix type **/
+        base::samples::RigidBodyState poseOut;
+        RTT::extras::ReadOnlyPointer<base::samples::frame::Frame> intraFrame_out;
 
 
     public:

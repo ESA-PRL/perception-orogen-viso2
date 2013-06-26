@@ -53,9 +53,9 @@ task_context "StereoOdometer" do
     #******************************
     # Aggregator does not support pointers as input ports
     stream_aligner() do
-	align_port("left_frame", 0.01)
-	align_port("right_frame", 0.01)
-	max_latency(0.3)
+	align_port("left_frame", 0.4)
+	align_port("right_frame", 0.4)
+	max_latency(1.0)
     end
 
     # An output port, i.e. an object to which the component pushes data so that
@@ -73,8 +73,8 @@ task_context "StereoOdometer" do
     #******************************
     #******* Debug Ports **********
     #******************************
-    output_port("inter_frame_samples_out",  ro_ptr('base::samples::frame::Frame')).
-        doc 'Inter frame correspondences image. Debug purposes'
+    output_port("intra_frame_samples_out",  ro_ptr('base::samples::frame::Frame')).
+        doc 'Intra frame correspondences image. Debug purposes'
 
 
     # If you want that component's updateHook() to be executed when the "input"

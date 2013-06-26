@@ -1,0 +1,35 @@
+--- name:default
+# maximum latency, in seconds, of the stream aligner. The aligner will start dropping samples if the difference between the last output and last input is greater than this
+aggregator_max_latency: 0.3
+# minimum time, in s, between two sequential samples arrive on left_frame
+left_frame_period: 0.01
+# minimum time, in s, between two sequential samples arrive on right_frame
+right_frame_period: 0.01
+# minimum system time in s between two status readings
+stream_aligner_status_period: 1.0
+# Visual Odometry Stereo parameters. Including intrinsic and extrinsic camera calibration parameters among othersfor a full parameter list have a look at viso2Types.hpp and at viso_stereo.h of the viso2 library
+viso2_parameters:
+  base: 0.17223694 #baseline in meters
+  ransac_iters: 200 #number of RANSAC iterations
+  inlier_threshold: 1.5 #fundamental matrix inlier threshold
+  reweighting: true #lower border weights (more robust to calibration errors)
+  match:
+    nms_n: 3 #non-max-suppression: min. distance between maxima (in pixels)
+    nms_tau: 50 #non-max-suppression: interest point peakiness threshold
+    match_binsize: 50 #matching bin width/height (affects efficiency only)
+    match_radius: 200 #matching radius (du/dv in pixels)
+    match_disp_tolerance: 2 #dv tolerance for stereo matches (in pixels)
+    outlier_disp_tolerance: 5 #outlier removal: disparity tolerance (in pixels)
+    outlier_flow_tolerance: 5 #outlier removal: flow tolerance (in pixels)
+    multi_stage: 1 #0=disabled,1=multistage matching (denser and faster)
+    half_resolution: 1 #0=disabled,1=match at half resolution, refine at full resolution
+    refinement: 1 #refinement (0=none,1=pixel,2=subpixel)
+  bucket:
+    max_features: 2 #maximal number of features per bucket
+    bucket_width: 50.0 #width of bucket
+    bucket_height: 50.0 #height of bucket
+  calib:
+    f: 1295.19657 #focal length in pixels
+    cu: 704.77750 #principal point (u-coordinate) in pixels
+    cv: 511.01565 #principal point (v-coordinate) in pixels
+
