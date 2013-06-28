@@ -1,0 +1,18 @@
+<package>
+  <description brief="Orogen component/Rock wrapper for libviso2, library for visual odometry">
+  Orogen component for libviso2, library for stereo/mono visual odometry and Structure-from-Motion pipeline (3d reconstruction) developed by Karlsruhe Institute of Technology.
+  </description>
+  <author>Javier Hidalgo Carrio/javier.hidalgo_carrio@dfki.de</author>
+  <license></license>
+  <url>http://</url>
+  <logo>http://</logo>
+  <!--
+   To add any dependencies use the depend tag
+  <depend package="dummy-dependency-0" />
+	...
+  <depend package="dummy-dependency-n-1" />
+  <depend package="dummy-dependency-n" />
+  -->
+  <depend package="base/types" />
+  <depend package="image_processing/viso2" />
+</package>
