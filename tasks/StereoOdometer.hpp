@@ -3,8 +3,17 @@
 #ifndef VISO2_STEREOODOMETER_TASK_HPP
 #define VISO2_STEREOODOMETER_TASK_HPP
 
-#include <memory.h>
 #include "viso2/StereoOdometerBase.hpp"
+
+/** Opencv for the conversion **/
+#include <opencv/cv.h>
+#include <opencv2/core/core.hpp>
+#include <opencv/highgui.h>
+
+/** Rock libraries **/
+#include "frame_helper/FrameHelper.h" /** Rock lib for manipulate frames **/
+#include "frame_helper/FrameHelperTypes.h" /** Types for FrameHelper **/
+#include "frame_helper/Calibration.h" /** Rock type for camera calibration parameters **/
 
 /** Boost **/
 #include <boost/shared_ptr.hpp> /** For shared pointers **/
@@ -64,7 +73,10 @@ namespace viso2 {
         /**************************/
         // set most important visual odometry parameters
         // for a full parameter list, look at: viso2/viso_stereo.h
-        VisualOdometryStereo::parameters param;
+        VisualOdometryStereo::parameters viso2param;
+
+        //Intrinsic and extrinsic parameters
+        frame_helper::StereoCalibration cameracalib;
 
         /******************************************/
         /*** General Internal Storage Variables ***/
@@ -74,17 +86,20 @@ namespace viso2 {
 
         boost::shared_ptr<VisualOdometryStereo> viso; /** Pointer to Viso2 object **/
         boost::circular_buffer<StereoPair> imagePair; /** Left and right images **/
-
-        virtual void left_frameCallback(const base::Time &ts, const ::RTT::extras::ReadOnlyPointer< ::base::samples::frame::Frame > &left_frame_sample);
-        virtual void right_frameCallback(const base::Time &ts, const ::RTT::extras::ReadOnlyPointer< ::base::samples::frame::Frame > &right_frame_sample);
+        frame_helper::FrameHelper frameHelper; /** Frame helper **/
 
         /***************************/
         /** Output Port Variables **/
         /***************************/
         Matrix pose;/** viso2 matrix type **/
-        base::samples::RigidBodyState poseOut;
-        RTT::extras::ReadOnlyPointer<base::samples::frame::Frame> intraFrame_out;
+        base::samples::RigidBodyState poseOut; /** Accumulated pose **/
+        RTT::extras::ReadOnlyPointer<base::samples::frame::Frame> intraFrame_out; /** Debug intra frame image **/
+        base::samples::DistanceImage distanceFrame_out;
 
+    protected:
+
+        virtual void left_frameCallback(const base::Time &ts, const ::RTT::extras::ReadOnlyPointer< ::base::samples::frame::Frame > &left_frame_sample);
+        virtual void right_frameCallback(const base::Time &ts, const ::RTT::extras::ReadOnlyPointer< ::base::samples::frame::Frame > &right_frame_sample);
 
     public:
         /** TaskContext constructor for StereoOdometer
@@ -161,6 +176,15 @@ namespace viso2 {
          * before calling start() again.
          */
         void cleanupHook();
+
+        void drawMatches(const base::samples::frame::Frame &image1, const base::samples::frame::Frame &image2,
+                        const std::vector<Matcher::p_match> &matches, const std::vector<int32_t>& inlier_indices, base::samples::frame::Frame &imageMatches);
+
+        void createDistanceImage(const base::samples::frame::Frame &image1, const base::samples::frame::Frame &image2,
+                        const std::vector<Matcher::p_match> &matches, const VisualOdometryStereo::parameters &viso2param,
+                        base::samples::DistanceImage &distImage);
+
+
     };
 }
 
