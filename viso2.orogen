@@ -4,14 +4,17 @@ name "viso2"
 
 # If new data types need to be defined, they have to be put in a separate C++
 # header, and this header will be loaded here
+import_types_from "base"
+import_types_from "frame_helper/Calibration.h"
+import_types_from "frame_helper/FrameHelperTypes.h"
 import_types_from "viso2Types.hpp"
 # Finally, it is pretty common that headers are directly loaded from an external
 # library. In this case, the library must be first used (the name is the
 # library's pkg-config name) and then the header can be used. Following Rock
 # conventions, a common use-case would be:
-#
+using_library "opencv"
+using_library "frame_helper"
 using_library "viso2"
-import_types_from "base"
 
 # If this project uses data types that are defined in other oroGen projects,
 # these projects should be imported there as well.
@@ -29,9 +32,14 @@ task_context "StereoOdometer" do
     #**************************
     #**** Task Properties *****
     #**************************
+    property("calib_parameters","frame_helper/StereoCalibration").
+        doc 'Intrinsic and extrinsic camera calibration parameters'+
+            'for a full parameter list have a look at frame_helper'
+
     property("viso2_parameters", 'viso2/StereoOdometerParameters').
-        doc 'Visual Odometry Stereo parameters. Including intrinsic and extrinsic camera calibration parameters among others'+
-            'for a full parameter list have a look at viso2Types.hpp and at viso_stereo.h of the viso2 library' 
+        doc 'Visual Odometry Stereo parameters'+
+            'for a full parameter list have a look at viso2Types.hpp'+
+            'and at viso_stereo.h of the viso2 library'
 
     # An input port, i.e. an object from which the component gets data from
     # other components' outputs
@@ -73,8 +81,34 @@ task_context "StereoOdometer" do
     #******************************
     #******* Debug Ports **********
     #******************************
+    property("intra_frame_out",  'bool', false).
+        doc 'If set this flag there is images in intra_frame outport. Debug purposes'
+
+    property("output_format", "/base/samples/frame/frame_mode_t", :MODE_UNDEFINED).
+       doc "The camera_format is converted into this format before it is written to the output port "
+           "Set it to MODE_UNDEFINED if you want to disable the conversion and the camera_format shall be used"
+
+    property("resize_algorithm","/frame_helper/ResizeAlgorithm",:INTER_LINEAR).
+        doc "resize algorithm which is used to scale the frame before it is written to the output port. "
+            "allowed values are INTER_LINEAR, INTER_NEAREST, INTER_AREA, INTER_CUBIC, INTER_LANCZOS4, BAYER_RESIZE"
+
+    property("scale_x", "double", 1).
+       doc "scale factor for the x direction which is used to scale the image before it is written to the output_port. "
+
+    property("scale_y", "double" ,1).
+       doc "scale factor for the y direction which is used to scale the image before it is written to the output_port. "
+
     output_port("intra_frame_samples_out",  ro_ptr('base::samples::frame::Frame')).
-        doc 'Intra frame correspondences image. Debug purposes'
+        doc 'Intra (Left - Right) frame correspondences image. Debug purposes'
+
+    output_port("distance_frame_samples_out",  'base::samples::DistanceImage').
+        doc 'Distance Image for 3D scene representation'
+
+#output_port("point_cloud_samples_out",  'base::samples::Pointcloud').
+#        doc 'Point Cloud representation'
+
+    output_port("left_frame_samples_out",  'base::samples::frame::Frame').
+        doc 'Left Image for the projection in the Point Cloud representation'
 
 
     # If you want that component's updateHook() to be executed when the "input"

@@ -16,4 +16,5 @@
   <depend package="base/types" />
   <depend package="drivers/orogen/aggregator" />
   <depend package="image_processing/viso2" />
+  <depend package="image_processing/frame_helper"/>
 </package>
