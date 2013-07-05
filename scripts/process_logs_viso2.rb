@@ -8,6 +8,7 @@ require 'utilrb'
 require 'eigen'
 
 include Orocos
+Orocos::CORBA.max_message_size = 90000000000000
 
 if ARGV.size < 1 then 
     puts "usage: process_logs_viso.rb <data_log_directory>"
@@ -43,62 +44,70 @@ Orocos.run 'viso2::StereoOdometer' => 'visual_odometry' do
 
     # get the task
     visual_odometry = Orocos.name_service.get 'visual_odometry'
-    Orocos.conf.apply(visual_odometry, ['default'], :override => true )
+    Orocos.conf.apply(visual_odometry, ['default', 'bumblebee'], :override => true )
 
     # connect the tasks to the logs
     log_replay = Orocos::Log::Replay.open( ARGV[0] )
 
     #mapping the logs into the input ports
-    log_replay.left_camera.frame.connect_to(visual_odometry.left_frame, :type => :buffer, :size => 100 )
-    log_replay.right_camera.frame.connect_to(visual_odometry.right_frame, :type => :buffer, :size => 100 )
+    #log_replay.left_camera.frame.connect_to(visual_odometry.left_frame, :type => :buffer, :size => 100 )
+    log_replay.stereo_camera_firewire.frame_right.connect_to(visual_odometry.left_frame, :type => :buffer, :size => 100 )
+    #log_replay.right_camera.frame.connect_to(visual_odometry.right_frame, :type => :buffer, :size => 100 )
+    log_replay.stereo_camera_firewire.frame_left.connect_to(visual_odometry.right_frame, :type => :buffer, :size => 100 )
 
     visual_odometry.configure
     visual_odometry.start
 
     # Trajectory of the ground truth
-    truthTrajectory = Vizkit.default_loader.TrajectoryVisualization
-    truthTrajectory.setColor(Eigen::Vector3.new(0, 255, 0)) #Green line
-    truthTrajectory.setPluginName("GroundTruthTrajectory")
+    #truthTrajectory = Vizkit.default_loader.TrajectoryVisualization
+    #truthTrajectory.setColor(Eigen::Vector3.new(0, 255, 0)) #Green line
+    #truthTrajectory.setPluginName("GroundTruthTrajectory")
 
 
     #Vicon marker visualization
-    rbsTruth = Vizkit.default_loader.RigidBodyStateVisualization
-    rbsTruth.setColor(Eigen::Vector3.new(0, 255, 0))#Green rbs
-    rbsTruth.setPluginName("GroundTruthPose")
-    rbsTruth.resetModel(0.4)
+    #rbsTruth = Vizkit.default_loader.RigidBodyStateVisualization
+    #rbsTruth.setColor(Eigen::Vector3.new(0, 255, 0))#Green rbs
+    #rbsTruth.setPluginName("GroundTruthPose")
+    #rbsTruth.resetModel(0.4)
 
-    log_replay.Task.pose_samples.connect_to do |data,_|
-        data.orientation = data.orientation * qViconMarker2BC
-        data.position = data.position - (data.orientation * tViconMarker2BC)
-        rbsTruth.updateRigidBodyState(data)
-	truthTrajectory.updateTrajectory(data.position)
-        if (initialization)
-            initPose.position = data.position+(data.orientation * tBC2CameraBase)
-            initPose.orientation = data.orientation
-            initialization = false
-        end
-    end
+    #log_replay.Task.pose_samples.connect_to do |data,_|
+    #    data.orientation = data.orientation * qViconMarker2BC
+    #    data.position = data.position - (data.orientation * tViconMarker2BC)
+    #    rbsTruth.updateRigidBodyState(data)
+    #    truthTrajectory.updateTrajectory(data.position)
+    #    if (initialization)
+    #        initPose.position = data.position+(data.orientation * tBC2CameraBase)
+    #        initPose.orientation = data.orientation
+    #        initialization = false
+    #    end
+    #end
 
     # Trajectory of the ground truth
-    cameraTrajectory = Vizkit.default_loader.TrajectoryVisualization
-    cameraTrajectory.setColor(Eigen::Vector3.new(255, 0, 0)) #Red line
-    cameraTrajectory.setPluginName("CameraTrajectory")
+    #cameraTrajectory = Vizkit.default_loader.TrajectoryVisualization
+    #cameraTrajectory.setColor(Eigen::Vector3.new(255, 0, 0)) #Red line
+    #cameraTrajectory.setPluginName("CameraTrajectory")
 
 
-    #Vicon marker visualization
-    rbsCamera = Vizkit.default_loader.RigidBodyStateVisualization
-    rbsCamera.setColor(Eigen::Vector3.new(255, 0, 0))#Red rbs
-    rbsCamera.setPluginName("CameraPose")
-    rbsCamera.resetModel(0.4)
+    ##Vicon marker visualization
+    #rbsCamera = Vizkit.default_loader.RigidBodyStateVisualization
+    #rbsCamera.setColor(Eigen::Vector3.new(255, 0, 0))#Red rbs
+    #rbsCamera.setPluginName("CameraPose")
+    #rbsCamera.resetModel(0.4)
 
-    visual_odometry.pose_samples_out.connect_to do |data, _|
-        #data.orientation = data.orientation * qTiltCamera2Camera
-        data.orientation = (data.orientation * initPose.orientation)*qWorld2Camera
-        data.position =  initPose.position + (data.orientation * data.position)
-        rbsCamera.updateRigidBodyState(data)
-	cameraTrajectory.updateTrajectory(data.position)
+    #visual_odometry.pose_samples_out.connect_to do |data, _|
+    #    #data.orientation = data.orientation * qTiltCamera2Camera
+    #    data.orientation = (data.orientation * initPose.orientation)*qWorld2Camera
+    #    data.position =  initPose.position + (data.orientation * data.position)
+    #    rbsCamera.updateRigidBodyState(data)
+    #    cameraTrajectory.updateTrajectory(data.position)
+    #end
+    
+    #DistanceImage
+    distImage = Vizkit.default_loader.DistanceImageVisualization
+    visual_odometry.distance_frame_samples_out.connect_to distImage
+    visual_odometry.left_frame_samples_out.connect_to do |data, _|
+        distImage.updateImageRGB24(data)
     end
-
 
 
     # open the log replay widget
