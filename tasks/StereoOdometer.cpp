@@ -2,6 +2,8 @@
 
 #include "StereoOdometer.hpp"
 
+#define DEBUG_PRINTS 1
+
 using namespace viso2;
 
 StereoOdometer::StereoOdometer(std::string const& name)
@@ -20,124 +22,70 @@ StereoOdometer::~StereoOdometer()
 
 void StereoOdometer::left_frameCallback(const base::Time &ts, const ::RTT::extras::ReadOnlyPointer< ::base::samples::frame::Frame > &left_frame_sample)
 {
-    imagePair[0].time = left_frame_sample->time; //time of the pair
+    imagePair[0].first.time = left_frame_sample->time; //time of the left image
 
-    /** Correct distorsion in images left **/
-    frameHelper.setCalibrationParameter(cameracalib.camLeft);
 
-    /** The image need to be in gray scale and undistort **/
-    //imagePair[0].left.init(*left_frame_sample, false);
-    imagePair[0].left.frame_mode = base::samples::frame::MODE_RGB;
-    imagePair[0].left.setDataDepth(left_frame_sample->getDataDepth());
-    frameHelper.convert (*left_frame_sample, imagePair[0].left, 0, 0, frame_helper::INTER_LINEAR, true);
-    //frameHelper.undistort (*left_frame_sample, imagePair[0].left);
+    RTT::log(RTT::Warning) << "[VISO2 LEFT_FRAME] Frame arrived at: " <<left_frame_sample->time<< RTT::endlog();
 
-    //imagePair[0].left = *left_frame_sample;
+    /** The image need to be in gray scale and undistorted **/
+    imagePair[0].first.frame_mode = base::samples::frame::MODE_GRAYSCALE;
+    imagePair[0].first.setDataDepth(left_frame_sample->getDataDepth());
+    frameHelperLeft.convert (*left_frame_sample, imagePair[0].first, 0, 0, frame_helper::INTER_LINEAR, true);
 
-    RTT::log(RTT::Warning) << "[LeftFrameCallback] Frame arrived at: " <<left_frame_sample->time<< RTT::endlog();
+    /** Left color image **/
+    leftColorImage.frame_mode = base::samples::frame::MODE_RGB;
+    leftColorImage.setDataDepth(left_frame_sample->getDataDepth());
+    frameHelperLeft.convert (*left_frame_sample, leftColorImage, 0, 0, frame_helper::INTER_LINEAR, true);
 
-    /* Set to true the new image **/
-    flag.leftFrameSamples = true;
+    /** Check the time difference between inertial sensors and joint samples **/
+    base::Time diffTime = imagePair[0].first.time - imagePair[0].second.time;
+
+    /** If the difference in time is less than half of a period run the odometry **/
+    if (diffTime.toSeconds() < (_left_frame_period/2.0))
+    {
+        imagePair[0].time = imagePair[0].first.time;
+
+        #ifdef DEBUG_PRINTS
+        std::cout<< "[VISO2 LEFT_FRAME] [ON] ("<<diffTime.toMicroseconds()<<")\n";
+        #endif
+
+        this->computeStereoOdometer();
+
+    }
 
     return;
 }
 
 void StereoOdometer::right_frameCallback(const base::Time &ts, const ::RTT::extras::ReadOnlyPointer< ::base::samples::frame::Frame > &right_frame_sample)
 {
-    uint8_t *l_image_data, *r_image_data;
 
-    //imagePair[0].right = *right_frame_sample;
+    imagePair[0].second.time = right_frame_sample->time; //time stamp for the right image
 
-    RTT::log(RTT::Warning) << "[RightFrameCallback] Frame arrived at: " <<right_frame_sample->time<< RTT::endlog();
+    RTT::log(RTT::Warning) << "[VISO2 RIGHT_FRAME] Frame arrived at: " <<right_frame_sample->time<< RTT::endlog();
 
 
-    if (flag.leftFrameSamples)
+    /** Correct distortion in image right **/
+    imagePair[0].second.frame_mode = base::samples::frame::MODE_GRAYSCALE;
+    imagePair[0].second.setDataDepth(right_frame_sample->getDataDepth());
+    frameHelperRight.convert (*right_frame_sample, imagePair[0].second, 0, 0, frame_helper::INTER_LINEAR, true);
+
+
+    /** Check the time difference between inertial sensors and joint samples **/
+    base::Time diffTime = imagePair[0].second.time - imagePair[0].first.time;
+
+    /** If the difference in time is less than half of a period run the odometry **/
+    if (diffTime.toSeconds() < (_right_frame_period/2.0))
     {
-        flag.rightFrameSamples = true;
+        imagePair[0].time = imagePair[0].second.time;
 
-        /** Correct distorsion in image right **/
-        frameHelper.setCalibrationParameter(cameracalib.camRight);
-        //imagePair[0].right.init (*right_frame_sample, false);
-        imagePair[0].right.frame_mode = base::samples::frame::MODE_RGB;
-        imagePair[0].right.setDataDepth(right_frame_sample->getDataDepth());
-        frameHelper.convert (*right_frame_sample, imagePair[0].right, 0, 0, frame_helper::INTER_LINEAR, true);
-        //frameHelper.undistort (*right_frame_sample, imagePair[0].right);
+        #ifdef DEBUG_PRINTS
+        std::cout<< "[VISO2 RIGHT_FRAME] [ON] ("<<diffTime.toMicroseconds()<<")\n";
+        #endif
 
-        base::Time frameDelta_t = imagePair[0].right.time-imagePair[0].left.time;
-        RTT::log(RTT::Warning) << "[StereOdometer] SyncroDiff: " <<frameDelta_t.toSeconds() << RTT::endlog();
+        this->computeStereoOdometer();
 
-        /** Get the images to plain pointers **/
-        l_image_data = imagePair[0].left.getImagePtr();
-        r_image_data = imagePair[0].right.getImagePtr();
-        int32_t dims[] = {imagePair[0].left.size.width, imagePair[0].left.size.height, imagePair[0].left.size.width};
-
-
-        if (viso->process (l_image_data, r_image_data, dims) )
-        {
-            /** on success, update current pose **/
-            pose = pose * Matrix::inv(viso->getMotion());
-
-            /** output some statistics **/
-            double num_matches = viso->getNumberOfMatches();
-            double num_inliers = viso->getNumberOfInliers();
-            std::cout << ", Matches: " << num_matches;
-            std::cout << ", Inliers: " << 100.0*num_inliers/num_matches << " %" << ", Current pose: " << std::endl;
-            std::cout << pose << std::endl << std::endl;
-
-            /** Map the viso2 data to an Eigen matrix **/
-            register int k = 0;
-            double mdata[16];
-            base::Matrix4d poseM;
-            for (register int  i=0; i<4; i++)
-                for (register int j=0; j<4; j++)
-                        mdata[k++] = pose.val[j][i];
-
-            poseM = Eigen::Map<const base::Matrix4d> (&(mdata[0]), 4, 4);
-            std::cout << poseM << std::endl << std::endl;
-
-            /** Store in RigidBodyState to port out the pose **/
-            Eigen::Quaternion<double> attitude(poseM.block<3,3> (0,0));
-            poseOut.time = imagePair[0].left.time;
-            poseOut.orientation = attitude;
-            poseOut.position = poseM.col(3).block<3,1>(0,0);
-            std::cout << "Orientation (Quaternion): "<< attitude.w()<<","<<attitude.x()<<","<<attitude.y()<<","<<attitude.z()<<"\n";
-            std::cout << "Position:\n"<< poseOut.position<<"\n";
-
-            _pose_samples_out.write(poseOut);
-
-            /** Draw matches in the images usin the FrameHelper which internally uses openCV **/
-            ::base::samples::frame::Frame *frame_ptr = intraFrame_out.write_access();
-
-            this->drawMatches (imagePair[0].left, imagePair[0].right, viso->getMatches(), viso->getInlierIndices(), *frame_ptr);
-
-            frame_ptr->time = imagePair[0].left.time;
-            intraFrame_out.reset(frame_ptr);
-            std::cout<<"frame_ptr: "<<frame_ptr<<"\n";
-            std::cout<<"frame size: "<<frame_ptr->size.width*frame_ptr->size.height<<"\n";
-            _intra_frame_samples_out.write(intraFrame_out);
-
-            /** Create distance image **/
-            this->createDistanceImage(imagePair[0].left, imagePair[0].right, viso->getMatches(), viso2param, distanceFrame_out);
-            _distance_frame_samples_out.write(distanceFrame_out);
-            _left_frame_samples_out.write(imagePair[0].left);
-
-        }
-        else
-        {
-            RTT::log(RTT::Warning) << "Viso2 Stereo Odometer failed!!" << RTT::endlog();
-        }
-
-
-        flag.reset();
-    }
-    else
-    {
-        flag.rightFrameSamples = true;
     }
 
-
-
-    
     return;
 }
 /// The following lines are template definitions for the various state machine
@@ -149,7 +97,7 @@ bool StereoOdometer::configureHook()
     if (! StereoOdometerBase::configureHook())
         return false;
 
-    /** Read the camera calib parameters **/
+    /** Read the camera calibration parameters **/
     cameracalib = _calib_parameters.value();
 
     /** Read the dedicated viso2  parameter configuration values **/
@@ -159,14 +107,32 @@ bool StereoOdometer::configureHook()
     viso2param.match = _viso2_parameters.value().match;
     viso2param.bucket = _viso2_parameters.value().bucket;
 
-    /** Set the calib parameter in the viso2 type **/
+    /** Set the calibration parameters in the viso2 type **/
     viso2param.base = cameracalib.extrinsic.tx/1000.00; //baseline in viso2 is in meters and comes in mm
     viso2param.calib.f = 0.5*(cameracalib.camLeft.fx + cameracalib.camRight.fx);
     viso2param.calib.cu = 0.5*(cameracalib.camLeft.cx + cameracalib.camRight.cx);
     viso2param.calib.cv = 0.5*(cameracalib.camLeft.cy + cameracalib.camRight.cy);
 
+    /** Re-projection Q matrix **/
+    Q = Eigen::Matrix4d::Zero();
+    Q(0,0) = Q(1,1) = 1.0;
+    Q(3,2) = 1.0/viso2param.base;
+    Q(0,3) = -cameracalib.camRight.cx;
+    Q(1,3) = -cameracalib.camRight.cy;
+    Q(2,3) = cameracalib.camRight.fx;
+    Q(3,3) = (cameracalib.camRight.cx - cameracalib.camLeft.cx)/viso2param.base;
+
+    #ifdef DEBUG_PRINTS
+    std::cout<< "[VISO2 CONFIGURATION] Q re-projection matrix:\n "<<Q<<"\n";
+    #endif
+
+
     /** Initialize variables **/
     viso.reset(new VisualOdometryStereo(viso2param));
+
+    /** Frame Helper **/
+    frameHelperLeft.setCalibrationParameter(cameracalib.camLeft);
+    frameHelperRight.setCalibrationParameter(cameracalib.camRight);
 
     /** Viso2 Matrix class initialization **/
     pose = Matrix::eye(4);
@@ -176,32 +142,15 @@ bool StereoOdometer::configureHook()
     poseOut.sourceFrame = "CameraFrame_T";
     poseOut.targetFrame = "CameraFrame_0";
 
-    /** Initialize flag **/
-    flag.reset();
-
     /** Stereo working pair **/
-    StereoPair pair;
-    imagePair.set_capacity(1);
+    ::base::samples::frame::FramePair pair;
+    imagePair.set_capacity(DEFAULT_CIRCULAR_BUFFER_SIZE);
     imagePair.push_front(pair);
 
     ::base::samples::frame::Frame *intraFrame = new ::base::samples::frame::Frame();
 
     intraFrame_out.reset(intraFrame);
     intraFrame = NULL;
-
-    /** Distance Image **/
-    const size_t
-	width = _calib_parameters.value().camLeft.width,
-	height = _calib_parameters.value().camRight.height;
-
-    // pre-allocate the memory for the output disparity map, so we don't
-    // have to copy it. This means we have to assert that the width and
-    // height is the same for input and resulting disparity images
-    distanceFrame_out.setSize(width, height);
-    distanceFrame_out.setIntrinsic(_calib_parameters.value().camLeft.fx,
-                                   _calib_parameters.value().camLeft.fy,
-                                   _calib_parameters.value().camLeft.cx,
-                                   _calib_parameters.value().camLeft.cy);
 
     return true;
 }
@@ -228,14 +177,81 @@ void StereoOdometer::cleanupHook()
 {
     StereoOdometerBase::cleanupHook();
 }
+
+void StereoOdometer::computeStereoOdometer()
+{
+    uint8_t *l_image_data, *r_image_data;
+
+    /** Get the images to plain pointers **/
+    l_image_data = imagePair[0].first.getImagePtr();
+    r_image_data = imagePair[0].second.getImagePtr();
+    int32_t dims[] = {imagePair[0].first.size.width, imagePair[0].first.size.height, imagePair[0].first.size.width};
+
+
+    if (viso->process (l_image_data, r_image_data, dims) )
+    {
+        /** on success, update current pose **/
+        pose = pose * Matrix::inv(viso->getMotion());
+
+        /** output some statistics **/
+        double num_matches = viso->getNumberOfMatches();
+        double num_inliers = viso->getNumberOfInliers();
+        std::cout << ", Matches: " << num_matches;
+        std::cout << ", Inliers: " << 100.0*num_inliers/num_matches << " %" << ", Current pose: " << std::endl;
+        std::cout << pose << std::endl << std::endl;
+
+        /** Map the viso2 data to an Eigen matrix **/
+        register int k = 0;
+        double mdata[16];
+        base::Matrix4d poseM;
+        for (register int  i=0; i<4; i++)
+            for (register int j=0; j<4; j++)
+                    mdata[k++] = pose.val[j][i];
+
+        poseM = Eigen::Map<const base::Matrix4d> (&(mdata[0]), 4, 4);
+        std::cout << poseM << std::endl << std::endl;
+
+        /** Store in RigidBodyState to port out the pose **/
+        Eigen::Quaternion<double> attitude(poseM.block<3,3> (0,0));
+        poseOut.time = imagePair[0].time;
+        poseOut.orientation = attitude;
+        poseOut.position = poseM.col(3).block<3,1>(0,0);
+        std::cout << "Orientation (Quaternion): "<< attitude.w()<<","<<attitude.x()<<","<<attitude.y()<<","<<attitude.z()<<"\n";
+        std::cout << "Position:\n"<< poseOut.position<<"\n";
+
+        _pose_samples_out.write(poseOut);
+
+        /** Draw matches in the images using the FrameHelper which internally uses openCV **/
+        ::base::samples::frame::Frame *frame_ptr = intraFrame_out.write_access();
+        this->drawMatches (imagePair[0].first, imagePair[0].second, viso->getMatches(), viso->getInlierIndices(), *frame_ptr);
+
+        frame_ptr->time = imagePair[0].time;
+        intraFrame_out.reset(frame_ptr);
+        std::cout<<"frame_ptr: "<<frame_ptr<<"\n";
+        std::cout<<"frame size: "<<frame_ptr->size.width*frame_ptr->size.height<<"\n";
+        _intra_frame_samples_out.write(intraFrame_out);
+
+        /** Create the point cloud **/
+        this->createPointCloud(leftColorImage, viso->getMatches(), viso->getInlierIndices(), Q, pointcloud_out);
+        _point_cloud_samples_out.write(pointcloud_out);
+
+    }
+    else
+    {
+        RTT::log(RTT::Warning) << "[VISO2] Stereo Odometer failed!!" << RTT::endlog();
+    }
+
+
+    return;
+}
 void StereoOdometer::drawMatches(const base::samples::frame::Frame &image1,
                                     const base::samples::frame::Frame &image2,
                                     const std::vector<Matcher::p_match> &matches,
                                     const std::vector<int32_t>& inlier_indices,
                                     base::samples::frame::Frame &imageMatches)
 {
-    ::cv::Mat cvImage1 = frameHelper.convertToCvMat(image1);
-    ::cv::Mat cvImage2 = frameHelper.convertToCvMat(image2);
+    ::cv::Mat cvImage1 = frameHelperLeft.convertToCvMat(image1);
+    ::cv::Mat cvImage2 = frameHelperRight.convertToCvMat(image2);
     ::cv::Mat cvImgMatches;
     std::vector< cv::KeyPoint > keypoints1, keypoints2;
     std::vector< cv::DMatch > cvMatches;
@@ -260,7 +276,7 @@ void StereoOdometer::drawMatches(const base::samples::frame::Frame &image1,
     }
 
     cv::drawMatches (cvImage1, keypoints1, cvImage2, keypoints2, cvMatches, cvImgMatches);
-    frameHelper.copyMatToFrame(cvImgMatches, imageMatches);
+    frameHelperLeft.copyMatToFrame(cvImgMatches, imageMatches);
 
     return;
 }
@@ -271,8 +287,6 @@ void StereoOdometer::createDistanceImage(const base::samples::frame::Frame &imag
                         const VisualOdometryStereo::parameters &viso2param,
                         base::samples::DistanceImage &distImage)
 {
-
-    register int i;
 
     /** Firs set all the distance z values to NaN **/
     std::fill(distImage.data.begin(), distImage.data.end(), base::unknown < base::samples::DistanceImage::scalar >());
@@ -285,3 +299,33 @@ void StereoOdometer::createDistanceImage(const base::samples::frame::Frame &imag
 
     }
 }
+
+void StereoOdometer::createPointCloud(const base::samples::frame::Frame &image1,
+                        const std::vector<Matcher::p_match> &matches,
+                        const std::vector<int32_t>& inlier_indices,
+                        const Eigen::Matrix4d &Q, 
+                        ::base::samples::Pointcloud &pointcloud)
+{
+    cv::Mat cv_image1 = frame_helper::FrameHelper::convertToCvMat(image1);
+    pointcloud.points.resize(inlier_indices.size());
+    pointcloud.colors.resize(inlier_indices.size());
+
+    for (register size_t i = 0; i < inlier_indices.size(); ++i)
+    {
+        const Matcher::p_match& match = matches[inlier_indices[i]];
+        ::base::Vector3d point (match.u1c + Q(0,3),  match.v1c + Q(1,3), Q(2,3));
+        double disparity = match.u1c - match.u2c;
+        double W  = Q(3,2)*disparity + Q(3,3);
+        point = point * (1.0/W);
+        pointcloud.points[i] = point;
+        cv::Vec3b color = cv_image1.at<cv::Vec3b>(match.v1c, match.u1c);
+        :: base::Vector4d color4d;
+        color4d[0] = color[0];//R
+        color4d[1] = color[1];//G
+        color4d[2] = color[2];//B
+        color4d[3] = 1.0;//Alpha
+        pointcloud.colors[i] = color4d;
+    }
+
+}
+

@@ -48,8 +48,9 @@ Orocos.run 'viso2::StereoOdometer' => 'visual_odometry' do
 
     # connect the tasks to the logs
     log_replay = Orocos::Log::Replay.open( ARGV[0] )
+    log_replay.use_sample_time = true
 
-    #mapping the logs into the input ports
+    #mapping the logs into the input ports (in the logs of 20130702 the right and left camera are changed!!!!)
     #log_replay.left_camera.frame.connect_to(visual_odometry.left_frame, :type => :buffer, :size => 100 )
     log_replay.stereo_camera_firewire.frame_right.connect_to(visual_odometry.left_frame, :type => :buffer, :size => 100 )
     #log_replay.right_camera.frame.connect_to(visual_odometry.right_frame, :type => :buffer, :size => 100 )
@@ -101,14 +102,6 @@ Orocos.run 'viso2::StereoOdometer' => 'visual_odometry' do
     #    rbsCamera.updateRigidBodyState(data)
     #    cameraTrajectory.updateTrajectory(data.position)
     #end
-    
-    #DistanceImage
-    distImage = Vizkit.default_loader.DistanceImageVisualization
-    visual_odometry.distance_frame_samples_out.connect_to distImage
-    visual_odometry.left_frame_samples_out.connect_to do |data, _|
-        distImage.updateImageRGB24(data)
-    end
-
 
     # open the log replay widget
     control = Vizkit.control log_replay

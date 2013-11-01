@@ -25,29 +25,6 @@
 
 namespace viso2 {
 
-    struct StereoPair
-    {
-        base::Time time;
-        ::base::samples::frame::Frame left;
-        ::base::samples::frame::Frame right;
-        uint32_t id;	
-    };
-
-    /** Inport samples arrived ON/OFF flags **/
-    struct FlagInputPorts
-    {
-        void reset()
-        {
-            leftFrameSamples = false;
-            rightFrameSamples = false;
-            return;
-        }
-
-        bool leftFrameSamples;//Encoders
-        bool rightFrameSamples;//Passive joint
-    };
-
-
 
     /*! \class StereoOdometer 
      * \brief The task context provides and requires services. It uses an ExecutionEngine to perform its functions.
@@ -66,6 +43,10 @@ namespace viso2 {
     class StereoOdometer : public StereoOdometerBase
     {
 	friend class StereoOdometerBase;
+
+    protected:
+        static const int DEFAULT_CIRCULAR_BUFFER_SIZE = 2;
+
     protected:
 
         /**************************/
@@ -75,18 +56,17 @@ namespace viso2 {
         // for a full parameter list, look at: viso2/viso_stereo.h
         VisualOdometryStereo::parameters viso2param;
 
-        //Intrinsic and extrinsic parameters
+        //Intrinsic and extrinsic parameters for the pinhole camera model
         frame_helper::StereoCalibration cameracalib;
 
         /******************************************/
         /*** General Internal Storage Variables ***/
         /******************************************/
 
-        FlagInputPorts flag;
-
         boost::shared_ptr<VisualOdometryStereo> viso; /** Pointer to Viso2 object **/
-        boost::circular_buffer<StereoPair> imagePair; /** Left and right images **/
-        frame_helper::FrameHelper frameHelper; /** Frame helper **/
+        boost::circular_buffer<base::samples::frame::FramePair> imagePair; /** Left and right images **/
+        frame_helper::FrameHelper frameHelperLeft, frameHelperRight; /** Frame helper **/
+        ::base::samples::frame::Frame leftColorImage;
 
         /***************************/
         /** Output Port Variables **/
@@ -94,7 +74,9 @@ namespace viso2 {
         Matrix pose;/** viso2 matrix type **/
         base::samples::RigidBodyState poseOut; /** Accumulated pose **/
         RTT::extras::ReadOnlyPointer<base::samples::frame::Frame> intraFrame_out; /** Debug intra frame image **/
-        base::samples::DistanceImage distanceFrame_out;
+        base::samples::Pointcloud pointcloud_out;
+
+        Eigen::Matrix4d Q; /** Re-projection matrix **/
 
     protected:
 
@@ -177,6 +159,10 @@ namespace viso2 {
          */
         void cleanupHook();
 
+        /** @brief Computes one step of stereo visual odometry
+         */
+        void computeStereoOdometer();
+
         void drawMatches(const base::samples::frame::Frame &image1, const base::samples::frame::Frame &image2,
                         const std::vector<Matcher::p_match> &matches, const std::vector<int32_t>& inlier_indices, base::samples::frame::Frame &imageMatches);
 
@@ -184,6 +170,11 @@ namespace viso2 {
                         const std::vector<Matcher::p_match> &matches, const VisualOdometryStereo::parameters &viso2param,
                         base::samples::DistanceImage &distImage);
 
+        void createPointCloud(const base::samples::frame::Frame &image1, 
+                        const std::vector<Matcher::p_match> &matches,
+                        const std::vector<int32_t>& inlier_indices,
+                        const Eigen::Matrix4d &Q,
+                        ::base::samples::Pointcloud &pointcloud);
 
     };
 }

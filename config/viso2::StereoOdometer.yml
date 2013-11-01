@@ -12,14 +12,14 @@ viso2_parameters:
     nms_tau: 50 #non-max-suppression: interest point peakiness threshold
     match_binsize: 50 #matching bin width/height (affects efficiency only)
     match_radius: 200 #matching radius (du/dv in pixels)
-    match_disp_tolerance: 8 #dv tolerance for stereo matches (in pixels)
+    match_disp_tolerance: 1 #dv tolerance for stereo matches (in pixels)
     outlier_disp_tolerance: 5 #outlier removal: disparity tolerance (in pixels)
     outlier_flow_tolerance: 5 #outlier removal: flow tolerance (in pixels)
     multi_stage: 1 #0=disabled,1=multistage matching (denser and faster)
     half_resolution: 1 #0=disabled,1=match at half resolution, refine at full resolution
-    refinement: 1 #refinement (0=none,1=pixel,2=subpixel)
+    refinement: 2 #refinement (0=none,1=pixel,2=subpixel)
   bucket:
-    max_features: 5 #maximal number of features per bucket
+    max_features: 2 #maximal number of features per bucket
     bucket_width: 20.0 #width of bucket
     bucket_height: 20.0 #height of bucket
 --- name:sherpa
@@ -66,43 +66,44 @@ calib_parameters:
 # maximum latency, in seconds, of the stream aligner. The aligner will start
 # dropping samples if the difference between the last output and last input is
 # greater than this
-aggregator_max_latency: 0.3
+aggregator_max_latency: 0.1
 # minimum time, in s, between two sequential samples arrive on left_frame
-left_frame_period: 0.06
+left_frame_period: 0.05
 # minimum time, in s, between two sequential samples arrive on right_frame
-right_frame_period: 0.06
+right_frame_period: 0.05
 
 # Calibration parameter for the frame_helper
 calib_parameters:
   camLeft:
-    fx: 868.51003
-    fy: 866.87998
-    cx: 524.58520
-    cy: 377.92063
-    d0: -0.38599
-    d1: 0.35310
-    d2: -0.00151
-    d3: 0.00432
+    fx: 837.98636
+    fy: 838.56569
+    cx: 509.74846
+    cy: 376.99711
+    d0: -0.35914
+    d1: 0.16317
+    d2: 0.00039
+    d3: 0.00041
     width: 1024
     height: 768
   camRight:
-    fx: 861.59200
-    fy: 864.90683
-    cx: 532.82283
-    cy: 393.51070
-    d0: -0.33618
-    d1: 0.20479
-    d2: 0.00117
-    d3: -0.00638
+    fx: 837.40801
+    fy: 838.06473
+    cx: 536.53701
+    cy: 377.66591
+    d0: -0.35499
+    d1: 0.15218
+    d2: 0.00019
+    d3: -0.00016
     width: 1024
     height: 768
+#Distnace between left and right camera
   extrinsic:
-    tx: 118.21890 #baseline in x (mm)
-    ty: 0.00 #baseline in y (mm)
-    tz: 0.00 #baseline in z (mm)
-    rx: 0.00 #rotation along x (rad)
-    ry: 0.00 #rotation along y (rad)
-    rz: 0.00 #rotation along z (rad)
+    tx: 120.42814 #baseline in x (mm)
+    ty: 0.63857 #baseline in y (mm)
+    tz: 0.3051 #baseline in z (mm)
+    rx: 0.00125 #rotation along x (rad)
+    ry: -0.00333 #rotation along y (rad)
+    rz: 0.00542 #rotation along z (rad)
 
 
 
