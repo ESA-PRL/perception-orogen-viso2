@@ -86,6 +86,15 @@ task_context "StereoOdometer" do
     output_port("pose_samples_out", "/base/samples/RigidBodyState").
         doc "Estimated left camera pose."
 
+    output_port("point_cloud_samples_out",  'base::samples::Pointcloud').
+        doc 'Point Cloud representation of the 3D features.'
+
+    output_port("point_cloud_jacobian_out", "base::MatrixXd").
+        doc "Jacobian of 3D images features."
+
+    output_port("point_cloud_variance_out", "base::MatrixXd").
+        doc "Jacobian of 3D images features."
+
     #******************************
     #******* Debug Ports **********
     #******************************
@@ -94,9 +103,6 @@ task_context "StereoOdometer" do
 
     output_port("intra_frame_samples_out",  ro_ptr('base::samples::frame::Frame')).
         doc 'Intra (Left - Right) frame correspondences image.'
-
-    output_port("point_cloud_samples_out",  'base::samples::Pointcloud').
-        doc 'Point Cloud representation of the 3D features.'
 
     output_port("left_frame_samples_out",  ro_ptr('base::samples::frame::FramePair')).
         doc 'Undistorted Image pair.'

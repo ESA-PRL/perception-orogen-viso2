@@ -8,6 +8,7 @@
  * which case you do not need this file
  */
 
+#include <base/Eigen.hpp>
 #include <viso2/matcher.h>
 #include <viso2/viso.h>
 
@@ -25,16 +26,15 @@ namespace viso2 {
         bool    reweighting;      // lower border weights (more robust to calibration errors)
         Matcher::parameters         match;            // matching parameters
         VisualOdometry::bucketing   bucket;           // bucketing parameters
-        //VisualOdometry::calibration calib;          // camera calibration parameters COMMENTED it will take values from FrameHelper calibration parameters
 
-        StereoOdometerParameters () {
+        StereoOdometerParameters ()
+        {
           ransac_iters     = 200;
           inlier_threshold = 1.5;
           reweighting      = true;
 
         }
-  };
-
+    };
 
 }
 

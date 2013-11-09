@@ -4,6 +4,13 @@
 
 #define DEBUG_PRINTS 1
 
+#ifndef D2R
+#define D2R M_PI/180.00 /** Convert degree to radian **/
+#endif
+#ifndef R2D
+#define R2D 180.00/M_PI /** Convert radian to degree **/
+#endif
+
 using namespace viso2;
 
 StereoOdometer::StereoOdometer(std::string const& name)
@@ -24,8 +31,8 @@ void StereoOdometer::left_frameCallback(const base::Time &ts, const ::RTT::extra
 {
     imagePair[0].first.time = left_frame_sample->time; //time of the left image
 
-
-    RTT::log(RTT::Warning) << "[VISO2 LEFT_FRAME] Frame arrived at: " <<left_frame_sample->time<< RTT::endlog();
+    //RTT::log(RTT::Warning) << "[VISO2 LEFT_FRAME] Frame arrived at: " <<left_frame_sample->time.toMicroseconds()<< RTT::endlog();
+    std::cout << "[VISO2 LEFT_FRAME] Frame arrived at: " <<left_frame_sample->time.toMicroseconds()<< std::endl;
 
     /** The image need to be in gray scale and undistorted **/
     imagePair[0].first.frame_mode = base::samples::frame::MODE_GRAYSCALE;
@@ -61,14 +68,13 @@ void StereoOdometer::right_frameCallback(const base::Time &ts, const ::RTT::extr
 
     imagePair[0].second.time = right_frame_sample->time; //time stamp for the right image
 
-    RTT::log(RTT::Warning) << "[VISO2 RIGHT_FRAME] Frame arrived at: " <<right_frame_sample->time<< RTT::endlog();
-
+    //RTT::log(RTT::Warning) << "[VISO2 RIGHT_FRAME] Frame arrived at: " <<right_frame_sample->time.toMicroseconds()<< RTT::endlog();
+    std::cout<< "[VISO2 RIGHT_FRAME] Frame arrived at: " <<right_frame_sample->time.toMicroseconds()<<std::endl;
 
     /** Correct distortion in image right **/
     imagePair[0].second.frame_mode = base::samples::frame::MODE_GRAYSCALE;
     imagePair[0].second.setDataDepth(right_frame_sample->getDataDepth());
     frameHelperRight.convert (*right_frame_sample, imagePair[0].second, 0, 0, frame_helper::INTER_LINEAR, true);
-
 
     /** Check the time difference between inertial sensors and joint samples **/
     base::Time diffTime = imagePair[0].second.time - imagePair[0].first.time;
@@ -126,6 +132,17 @@ bool StereoOdometer::configureHook()
     std::cout<< "[VISO2 CONFIGURATION] Q re-projection matrix:\n "<<Q<<"\n";
     #endif
 
+    /** Image plane uncertainty(variance) in pixel **/
+    pxleftVar << pow(cameracalib.camLeft.pixel_error[0],2), 0.00,
+              0.00, pow(cameracalib.camLeft.pixel_error[1]+viso2param.match.match_disp_tolerance, 2);
+
+    pxrightVar << pow(cameracalib.camRight.pixel_error[0],2), 0.00,
+              0.00, pow(cameracalib.camRight.pixel_error[1]+viso2param.match.match_disp_tolerance, 2);
+
+    #ifdef DEBUG_PRINTS
+    std::cout<< "[VISO2 CONFIGURATION] Left Frame Error matrix:\n "<<pxleftVar<<"\n";
+    std::cout<< "[VISO2 CONFIGURATION] Right Frame Error matrix:\n "<<pxrightVar<<"\n";
+    #endif
 
     /** Initialize variables **/
     viso.reset(new VisualOdometryStereo(viso2param));
@@ -134,10 +151,10 @@ bool StereoOdometer::configureHook()
     frameHelperLeft.setCalibrationParameter(cameracalib.camLeft);
     frameHelperRight.setCalibrationParameter(cameracalib.camRight);
 
-    /** Viso2 Matrix class initialization **/
-    pose = Matrix::eye(4);
+    /** Initial pose initialization **/
+    pose = Eigen::Affine3d::Identity();
 
-    /** Ribid body state output initialization **/
+    /** Rigid body state output initialization **/
     poseOut.invalidate();
     poseOut.sourceFrame = "CameraFrame_T";
     poseOut.targetFrame = "CameraFrame_0";
@@ -151,6 +168,9 @@ bool StereoOdometer::configureHook()
 
     intraFrame_out.reset(intraFrame);
     intraFrame = NULL;
+
+    /** Hash Table of indexes **/
+    hashIdx.set_capacity(DEFAULT_CIRCULAR_BUFFER_SIZE);
 
     return true;
 }
@@ -190,50 +210,83 @@ void StereoOdometer::computeStereoOdometer()
 
     if (viso->process (l_image_data, r_image_data, dims) )
     {
-        /** on success, update current pose **/
-        pose = pose * Matrix::inv(viso->getMotion());
-
-        /** output some statistics **/
-        double num_matches = viso->getNumberOfMatches();
-        double num_inliers = viso->getNumberOfInliers();
-        std::cout << ", Matches: " << num_matches;
-        std::cout << ", Inliers: " << 100.0*num_inliers/num_matches << " %" << ", Current pose: " << std::endl;
-        std::cout << pose << std::endl << std::endl;
+        Matrix deltaPoseViso2 =  Matrix::inv(viso->getMotion());
 
         /** Map the viso2 data to an Eigen matrix **/
         register int k = 0;
         double mdata[16];
-        base::Matrix4d poseM;
+        Eigen::Matrix4d deltaM;
         for (register int  i=0; i<4; i++)
             for (register int j=0; j<4; j++)
-                    mdata[k++] = pose.val[j][i];
+                    mdata[k++] = deltaPoseViso2.val[j][i];
+        deltaM = Eigen::Map<const Eigen::Matrix4d> (&(mdata[0]), 4, 4);
+        Eigen::Affine3d deltaPose; deltaPose.matrix() = deltaM;
 
-        poseM = Eigen::Map<const base::Matrix4d> (&(mdata[0]), 4, 4);
-        std::cout << poseM << std::endl << std::endl;
+        /** on success, update current pose **/
+        pose = pose * deltaPose;
+
+        /** output some statistics **/
+        double num_matches = viso->getNumberOfMatches();
+        double num_inliers = viso->getNumberOfInliers();
+        #ifdef DEBUG_PRINTS
+        std::cout << ", Matches: " << num_matches;
+        std::cout << ", Inliers: " << num_inliers;
+        std::cout << ", Inliers Ratio: " << 100.0*num_inliers/num_matches << " %" << ", Current pose: " << std::endl;
+        std::cout << pose.matrix() << std::endl << std::endl;
+        #endif
 
         /** Store in RigidBodyState to port out the pose **/
-        Eigen::Quaternion<double> attitude(poseM.block<3,3> (0,0));
+        Eigen::Quaternion<double> attitude(pose.rotation());
         poseOut.time = imagePair[0].time;
         poseOut.orientation = attitude;
-        poseOut.position = poseM.col(3).block<3,1>(0,0);
+        poseOut.position = pose.translation();
+        #ifdef DEBUG_PRINTS
         std::cout << "Orientation (Quaternion): "<< attitude.w()<<","<<attitude.x()<<","<<attitude.y()<<","<<attitude.z()<<"\n";
+        Eigen::Vector3d euler; /** In euler angles **/
+        euler[2] = attitude.toRotationMatrix().eulerAngles(2,1,0)[0];//YAW
+        euler[1] = attitude.toRotationMatrix().eulerAngles(2,1,0)[1];//PITCH
+        euler[0] = attitude.toRotationMatrix().eulerAngles(2,1,0)[2];//ROLL
+        std::cout<< "Roll: "<<euler[0]*R2D<<" Pitch: "<<euler[1]*R2D<<" Yaw: "<<euler[2]*R2D<<"\n";
         std::cout << "Position:\n"<< poseOut.position<<"\n";
+        #endif
 
         _pose_samples_out.write(poseOut);
 
-        /** Draw matches in the images using the FrameHelper which internally uses openCV **/
-        ::base::samples::frame::Frame *frame_ptr = intraFrame_out.write_access();
-        this->drawMatches (imagePair[0].first, imagePair[0].second, viso->getMatches(), viso->getInlierIndices(), *frame_ptr);
+        if (_output_debug.value())
+        {
+            /** Draw matches in the images using the FrameHelper which internally uses openCV **/
+            ::base::samples::frame::Frame *frame_ptr = intraFrame_out.write_access();
+            this->drawMatches (imagePair[0].first, imagePair[0].second, viso->getMatches(), viso->getInlierIndices(), *frame_ptr);
 
-        frame_ptr->time = imagePair[0].time;
-        intraFrame_out.reset(frame_ptr);
-        std::cout<<"frame_ptr: "<<frame_ptr<<"\n";
-        std::cout<<"frame size: "<<frame_ptr->size.width*frame_ptr->size.height<<"\n";
-        _intra_frame_samples_out.write(intraFrame_out);
+            frame_ptr->time = imagePair[0].time;
+            intraFrame_out.reset(frame_ptr);
+            #ifdef DEBUG_PRINTS
+            std::cout<<"frame_ptr: "<<frame_ptr<<"\n";
+            std::cout<<"frame size: "<<frame_ptr->size.width*frame_ptr->size.height<<"\n";
+            #endif
+            _intra_frame_samples_out.write(intraFrame_out);
+
+        }
 
         /** Create the point cloud **/
-        this->createPointCloud(leftColorImage, viso->getMatches(), viso->getInlierIndices(), Q, pointcloud_out);
-        _point_cloud_samples_out.write(pointcloud_out);
+        ::base::MatrixXd pointsVar;
+        this->createPointCloud(leftColorImage, viso->getMatches(), viso->getInlierIndices(), Q, pointcloud, pointsVar);
+
+        if (hashIdx.size() > 1)
+        {
+            /** Re-arrange the point cloud and compute the uncertainty **/
+            this->orderPointCloudAndUncertainty (hashIdx, pointcloud, pointsVar);
+        }
+        else
+            std::cout<<"First Point cloud\n";
+
+        /** Port out the information (current point cloud is at the vector front) **/
+        _point_cloud_samples_out.write(pointcloud);
+        _point_cloud_variance_out.write(pointsVar);
+
+        /** Compute Features Jacobian **/
+        base::MatrixXd featuresJacob = computeFeaturesJacobian(deltaPose, viso->getMatches(), viso->getInlierIndices());
+        _point_cloud_jacobian_out.write(featuresJacob);
 
     }
     else
@@ -304,28 +357,178 @@ void StereoOdometer::createPointCloud(const base::samples::frame::Frame &image1,
                         const std::vector<Matcher::p_match> &matches,
                         const std::vector<int32_t>& inlier_indices,
                         const Eigen::Matrix4d &Q, 
-                        ::base::samples::Pointcloud &pointcloud)
+                        ::base::samples::Pointcloud &pointcloud,
+                        ::base::MatrixXd &pointsVar)
 {
+
+    boost::unordered_map< int32_t, int32_t > hashTable;
+
+    /** Image for the colored points **/
     cv::Mat cv_image1 = frame_helper::FrameHelper::convertToCvMat(image1);
+
+    /** Size the point cloud **/
+    pointcloud.idx.resize(inlier_indices.size());
     pointcloud.points.resize(inlier_indices.size());
     pointcloud.colors.resize(inlier_indices.size());
+
+    /** Size the variance matrices **/
+    pointsVar.resize(3, 3*inlier_indices.size());
+
+    /** Uncertainty in the images (left and right) planes **/
+    Eigen::Matrix4d pxVar;
+    pxVar << pxleftVar, Eigen::Matrix2d::Zero(),
+        Eigen::Matrix2d::Zero(), pxrightVar;
 
     for (register size_t i = 0; i < inlier_indices.size(); ++i)
     {
         const Matcher::p_match& match = matches[inlier_indices[i]];
+
+        std::cout<<"Feature Idx (current L): "<<match.i1c<<" (current R): "<<match.i2c <<"\n";
+        std::cout<<"Feature Idx (previous L): "<<match.i1p<<" (previous R): "<<match.i2p <<"\n";
+
+       // std::cout<<"match["<<i<<"] "<<match.u1c <<" "<<match.u2c<<"\n";
         ::base::Vector3d point (match.u1c + Q(0,3),  match.v1c + Q(1,3), Q(2,3));
+       // std::cout<<"point["<<i<<"] "<<point[0] <<" "<<point[1]<<" "<<point[2]<<"\n";
         double disparity = match.u1c - match.u2c;
         double W  = Q(3,2)*disparity + Q(3,3);
         point = point * (1.0/W);
+        std::cout<<"3dpoint["<<i<<"] "<<point[0] <<" "<<point[1]<<" "<<point[2]<<"\n";
         pointcloud.points[i] = point;
-        cv::Vec3b color = cv_image1.at<cv::Vec3b>(match.v1c, match.u1c);
-        :: base::Vector4d color4d;
-        color4d[0] = color[0];//R
-        color4d[1] = color[1];//G
-        color4d[2] = color[2];//B
+        cv::Vec3f color = cv_image1.at<cv::Vec3b>(match.v1c, match.u1c);
+        ::base::Vector4d color4d;
+        color4d[0] = color[0]/255.0;//R
+        color4d[1] = color[1]/255.0;//G
+        color4d[2] = color[2]/255.0;//B
         color4d[3] = 1.0;//Alpha
         pointcloud.colors[i] = color4d;
+
+        /** Uncertainty information **/
+        Eigen::Matrix<double, 3, 4> noiseJacobian; /** Jacobian Matrix for the triangulation noise model */
+        double disparityPower = pow(disparity,2);
+
+        /** Noise Jacobian **/
+        noiseJacobian <<  -(viso2param.base*match.u2c)/disparityPower, 0, (viso2param.base*match.u1c)/disparityPower, 0.00,
+                -(viso2param.base*match.v1c)/disparityPower, viso2param.base/disparity, (viso2param.base*match.v1c)/disparityPower, 0,
+                -(viso2param.base*viso2param.calib.f)/disparityPower, 0,  (viso2param.base*viso2param.calib.f )/disparityPower, 0;
+
+        pointsVar.block<3,3> (0, 3*i) = noiseJacobian * pxVar * noiseJacobian.transpose();
+
+        std::cout<<"Point var:\n"<<pointsVar.block<3,3> (0, 3*i) <<"\n";
+
+        /** Feature index get the idx from the feature in the current left **/
+        pointcloud.idx[i] = match.i1c;
+
+        /** Add key to the hash table **/
+        hashTable.insert(std::make_pair(match.i1c, match.i1p));
+
     }
 
+    hashIdx.push_front(hashTable);
 }
 
+
+Eigen::Quaterniond r_to_q( const Eigen::Vector3d& r )
+{
+    double theta = r.norm();
+    if( fabs(theta) > 1e-5 )
+	return Eigen::Quaterniond( Eigen::AngleAxisd( theta, r/theta ) );
+    else
+	return Eigen::Quaterniond::Identity();
+}
+
+Eigen::Vector3d q_to_r( const Eigen::Quaterniond& q )
+{
+    Eigen::AngleAxisd aa( q );
+    return aa.axis() * aa.angle();
+}
+
+inline double sign( double v )
+{
+    return v > 0 ? 1.0 : -1.0;
+}
+
+Eigen::Matrix<double,3,3> skew_symmetric( const Eigen::Vector3d& r )
+{
+    Eigen::Matrix3d res;
+    res << 0, -r.z(), r.y(),
+	r.z(), 0, -r.x(),
+	-r.y(), r.x(), 0;
+    return res;
+}
+
+Eigen::Matrix<double,3,3> drx_by_dr( const Eigen::Quaterniond& q, const Eigen::Vector3d& x )
+{
+    const Eigen::Vector3d r( q_to_r( q ) );
+    const double theta = r.norm();
+    const double alpha = 1.0 - theta*theta/6.0;
+    const double beta = 0.5 - theta*theta/24.0;
+    const double gamma = 1.0 / 3.0 - theta*theta/30.0;
+    const double delta = -1.0 / 12.0 + theta*theta/180.0;
+
+    return Eigen::Matrix3d(
+	    -skew_symmetric(x)*(gamma*r*r.transpose()
+		- beta*skew_symmetric(r)+alpha*Eigen::Matrix3d::Identity())
+	    -skew_symmetric(r)*skew_symmetric(x)*(delta*r*r.transpose() 
+		+ 2.0*beta*Eigen::Matrix3d::Identity()) );
+}
+
+
+base::MatrixXd StereoOdometer::computeFeaturesJacobian (const Eigen::Affine3d &deltaPose,
+                                    const std::vector<Matcher::p_match> &matches,
+                                    const std::vector<int32_t>& inlier_indices)
+{
+    base::MatrixXd J;
+    J.resize(3, 3*inlier_indices.size());
+    J.setZero();
+
+    /** Get the delta 6D vector **/
+    Eigen::Quaternion<double> q(deltaPose.rotation());
+
+    #ifdef DEBUG_PRINTS
+    Eigen::Vector3d trans = deltaPose.translation();
+    Eigen::Vector3d euler;
+    euler[2] = q.toRotationMatrix().eulerAngles(2,1,0)[0];//YAW
+    euler[1] = q.toRotationMatrix().eulerAngles(2,1,0)[1];//PITCH
+    euler[0] = q.toRotationMatrix().eulerAngles(2,1,0)[2];//ROLL
+    std::cout<< "tx: "<<trans[0]<<" ty: "<<trans[1]<<" tz: "<<trans[2]<<"\n";
+    std::cout<< "rx: "<<euler[0]<<" ry: "<<euler[1]<<" rz: "<<euler[2]<<"\n";
+    #endif
+
+    /** Compute derivative matrix **/
+//    Eigen::Matrix<double, 6, 3> deltaF;
+//    deltaF << Eigen::Matrix3d::Identity(), drx_by_dr(q, deltaPose.translation());
+
+    for (register size_t i = 0; i < inlier_indices.size(); ++i)
+    {
+        /** Experimental **/
+        J.block<3,3> (0,3*i) = deltaPose.rotation();
+
+    }
+
+    return J;
+}
+
+void StereoOdometer::orderPointCloudAndUncertainty(boost::circular_buffer< boost::unordered_map< int32_t, int32_t > >& hashIdx,
+                                        base::samples::Pointcloud &pointcloud,
+                                        base::MatrixXd &pointsVar)
+{
+
+    base::samples::Pointcloud orderedPointcloud;
+    base::MatrixXd orderedPointsVar;
+
+    orderedPointcloud.idx.resize(pointcloud.points.size());
+    orderedPointcloud.points.resize(pointcloud.points.size());
+    orderedPointcloud.colors.resize(pointcloud.points.size());
+
+    for (register size_t i = 0; i < pointcloud.points.size(); ++i)
+    {
+//            const Matcher::p_match& match = matches[inlier_indices[i]];
+        std::cout<<"Hash0["<<i<<"]at["<<pointcloud.idx[i]<<"]: "<< hashIdx[0].at(pointcloud.idx[i])<<"\n";
+//        std::cout<<"Hash1["<<i<<"]at["<<pointcloud.idx[i]<<"]: "<< hashIdx[1].at(pointcloud.idx[i])<<"\n";
+
+        pointcloud.idx[i] = hashIdx[0].at(pointcloud.idx[i]);
+    }
+
+
+    return;
+}

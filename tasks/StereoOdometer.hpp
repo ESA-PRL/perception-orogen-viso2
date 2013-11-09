@@ -18,10 +18,12 @@
 /** Boost **/
 #include <boost/shared_ptr.hpp> /** For shared pointers **/
 #include <boost/circular_buffer.hpp> /** For circular buffers **/
+#include <boost/unordered_map.hpp>
 
 /** LibViso2 includes **/
 #include <viso2/matrix.h>
 #include <viso2/viso_stereo.h>
+
 
 namespace viso2 {
 
@@ -62,21 +64,22 @@ namespace viso2 {
         /******************************************/
         /*** General Internal Storage Variables ***/
         /******************************************/
-
         boost::shared_ptr<VisualOdometryStereo> viso; /** Pointer to Viso2 object **/
         boost::circular_buffer<base::samples::frame::FramePair> imagePair; /** Left and right images **/
         frame_helper::FrameHelper frameHelperLeft, frameHelperRight; /** Frame helper **/
-        ::base::samples::frame::Frame leftColorImage;
+        base::samples::Pointcloud pointcloud; /** Vector of point clouds **/
+        Eigen::Matrix4d Q; /** Re-projection matrix **/
+        ::base::samples::frame::Frame leftColorImage;/** coloring point clouds (if selected) */
+        ::base::Matrix2d pxleftVar, pxrightVar; /** Error variance of image plane in pixel units **/
+        boost::circular_buffer< boost::unordered_map< int32_t, int32_t > > hashIdx;
 
         /***************************/
         /** Output Port Variables **/
         /***************************/
-        Matrix pose;/** viso2 matrix type **/
+        Eigen::Affine3d pose; /** Accumulated pose **/
         base::samples::RigidBodyState poseOut; /** Accumulated pose **/
         RTT::extras::ReadOnlyPointer<base::samples::frame::Frame> intraFrame_out; /** Debug intra frame image **/
-        base::samples::Pointcloud pointcloud_out;
 
-        Eigen::Matrix4d Q; /** Re-projection matrix **/
 
     protected:
 
@@ -170,11 +173,20 @@ namespace viso2 {
                         const std::vector<Matcher::p_match> &matches, const VisualOdometryStereo::parameters &viso2param,
                         base::samples::DistanceImage &distImage);
 
-        void createPointCloud(const base::samples::frame::Frame &image1, 
+        void createPointCloud(const base::samples::frame::Frame &image1,
                         const std::vector<Matcher::p_match> &matches,
                         const std::vector<int32_t>& inlier_indices,
                         const Eigen::Matrix4d &Q,
-                        ::base::samples::Pointcloud &pointcloud);
+                        ::base::samples::Pointcloud &pointcloud,
+                        ::base::MatrixXd &pointsVar);
+
+        base::MatrixXd computeFeaturesJacobian (const Eigen::Affine3d &deltaPose,
+                                            const std::vector<Matcher::p_match> &matches,
+                                            const std::vector<int32_t>& inlier_indices);
+
+        void orderPointCloudAndUncertainty (boost::circular_buffer< boost::unordered_map< int32_t, int32_t > >& hashIdx,
+                                        base::samples::Pointcloud &pointcloud,
+                                        base::MatrixXd &pointsVar);
 
     };
 }

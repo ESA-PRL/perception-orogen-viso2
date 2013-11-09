@@ -10,7 +10,7 @@ viso2_parameters:
   match:
     nms_n: 3 #non-max-suppression: min. distance between maxima (in pixels)
     nms_tau: 50 #non-max-suppression: interest point peakiness threshold
-    match_binsize: 50 #matching bin width/height (affects efficiency only)
+    match_binsize: 50 #matching bin width/height (affects efficiency only) Step size for matching features (forward/backward and right/left)
     match_radius: 200 #matching radius (du/dv in pixels)
     match_disp_tolerance: 1 #dv tolerance for stereo matches (in pixels)
     outlier_disp_tolerance: 5 #outlier removal: disparity tolerance (in pixels)
@@ -20,8 +20,10 @@ viso2_parameters:
     refinement: 2 #refinement (0=none,1=pixel,2=subpixel)
   bucket:
     max_features: 2 #maximal number of features per bucket
-    bucket_width: 20.0 #width of bucket
-    bucket_height: 20.0 #height of bucket
+    bucket_width: 10.0 #width of bucket
+    bucket_height: 10.0 #height of bucket
+# Set to true if output debug information is desirable.
+output_debug: true
 --- name:sherpa
 # maximum latency, in seconds, of the stream aligner. The aligner will start
 # dropping samples if the difference between the last output and last input is
@@ -83,6 +85,10 @@ calib_parameters:
     d1: 0.16317
     d2: 0.00039
     d3: 0.00041
+    pixel_error:
+        data:
+        - 0.06887
+        - 0.08192
     width: 1024
     height: 768
   camRight:
@@ -94,6 +100,10 @@ calib_parameters:
     d1: 0.15218
     d2: 0.00019
     d3: -0.00016
+    pixel_error:
+        data:
+        - 0.07723
+        - 0.08236
     width: 1024
     height: 768
 #Distnace between left and right camera
@@ -104,6 +114,5 @@ calib_parameters:
     rx: 0.00125 #rotation along x (rad)
     ry: -0.00333 #rotation along y (rad)
     rz: 0.00542 #rotation along z (rad)
-
 
 
