@@ -367,7 +367,7 @@ void StereoOdometer::createPointCloud(const base::samples::frame::Frame &image1,
     cv::Mat cv_image1 = frame_helper::FrameHelper::convertToCvMat(image1);
 
     /** Size the point cloud **/
-    pointcloud.idx.resize(inlier_indices.size());
+//    pointcloud.idx.resize(inlier_indices.size());
     pointcloud.points.resize(inlier_indices.size());
     pointcloud.colors.resize(inlier_indices.size());
 
@@ -416,7 +416,7 @@ void StereoOdometer::createPointCloud(const base::samples::frame::Frame &image1,
         std::cout<<"Point var:\n"<<pointsVar.block<3,3> (0, 3*i) <<"\n";
 
         /** Feature index get the idx from the feature in the current left **/
-        pointcloud.idx[i] = match.i1c;
+//        pointcloud.idx[i] = match.i1c;
 
         /** Add key to the hash table **/
         hashTable.insert(std::make_pair(match.i1c, match.i1p));
@@ -516,17 +516,17 @@ void StereoOdometer::orderPointCloudAndUncertainty(boost::circular_buffer< boost
     base::samples::Pointcloud orderedPointcloud;
     base::MatrixXd orderedPointsVar;
 
-    orderedPointcloud.idx.resize(pointcloud.points.size());
+//    orderedPointcloud.idx.resize(pointcloud.points.size());
     orderedPointcloud.points.resize(pointcloud.points.size());
     orderedPointcloud.colors.resize(pointcloud.points.size());
 
     for (register size_t i = 0; i < pointcloud.points.size(); ++i)
     {
 //            const Matcher::p_match& match = matches[inlier_indices[i]];
-        std::cout<<"Hash0["<<i<<"]at["<<pointcloud.idx[i]<<"]: "<< hashIdx[0].at(pointcloud.idx[i])<<"\n";
+//        std::cout<<"Hash0["<<i<<"]at["<<pointcloud.idx[i]<<"]: "<< hashIdx[0].at(pointcloud.idx[i])<<"\n";
 //        std::cout<<"Hash1["<<i<<"]at["<<pointcloud.idx[i]<<"]: "<< hashIdx[1].at(pointcloud.idx[i])<<"\n";
 
-        pointcloud.idx[i] = hashIdx[0].at(pointcloud.idx[i]);
+//        pointcloud.idx[i] = hashIdx[0].at(pointcloud.idx[i]);
     }
 
 
