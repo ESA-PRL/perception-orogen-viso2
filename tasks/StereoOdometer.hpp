@@ -28,6 +28,16 @@
 namespace viso2 {
 
 
+    struct HashPoint
+    {
+        int32_t p_Idx; /* Previous left frame idx **/
+        base::Point point;
+        base::Vector4d color;
+        base::Matrix3d variance;
+        base::Matrix3d jacobian;
+    };
+
+
     /*! \class StereoOdometer 
      * \brief The task context provides and requires services. It uses an ExecutionEngine to perform its functions.
      * Essential interfaces are operations, data flow ports and properties. These interfaces have been defined using the oroGen specification.
@@ -67,11 +77,13 @@ namespace viso2 {
         boost::shared_ptr<VisualOdometryStereo> viso; /** Pointer to Viso2 object **/
         boost::circular_buffer<base::samples::frame::FramePair> imagePair; /** Left and right images **/
         frame_helper::FrameHelper frameHelperLeft, frameHelperRight; /** Frame helper **/
-        base::samples::Pointcloud pointcloud; /** Vector of point clouds **/
         Eigen::Matrix4d Q; /** Re-projection matrix **/
         ::base::samples::frame::Frame leftColorImage;/** coloring point clouds (if selected) */
         ::base::Matrix2d pxleftVar, pxrightVar; /** Error variance of image plane in pixel units **/
+        std::vector<int32_t> pastInliers;
         boost::circular_buffer< boost::unordered_map< int32_t, int32_t > > hashIdx;
+        boost::unordered_map< int32_t, HashPoint > hashPointcloudCurr;
+        boost::unordered_map< int32_t, HashPoint > hashPointcloudPrev;
 
         /***************************/
         /** Output Port Variables **/
@@ -79,6 +91,7 @@ namespace viso2 {
         Eigen::Affine3d pose; /** Accumulated pose **/
         base::samples::RigidBodyState poseOut; /** Accumulated pose **/
         RTT::extras::ReadOnlyPointer<base::samples::frame::Frame> intraFrame_out; /** Debug intra frame image **/
+        base::samples::Pointcloud pointcloud; /** Point cloud for the port out **/
 
 
     protected:
@@ -177,16 +190,19 @@ namespace viso2 {
                         const std::vector<Matcher::p_match> &matches,
                         const std::vector<int32_t>& inlier_indices,
                         const Eigen::Matrix4d &Q,
-                        ::base::samples::Pointcloud &pointcloud,
-                        ::base::MatrixXd &pointsVar);
+                        const Eigen::Affine3d &deltaPose,
+                        boost::circular_buffer< boost::unordered_map< int32_t, int32_t > > &hashIdx,
+                        boost::unordered_map< int32_t, HashPoint > &hashPointcloudPrev,
+                        boost::unordered_map< int32_t, HashPoint > &hashPointcloudCurr);
 
-        base::MatrixXd computeFeaturesJacobian (const Eigen::Affine3d &deltaPose,
-                                            const std::vector<Matcher::p_match> &matches,
-                                            const std::vector<int32_t>& inlier_indices);
 
-        void orderPointCloudAndUncertainty (boost::circular_buffer< boost::unordered_map< int32_t, int32_t > >& hashIdx,
-                                        base::samples::Pointcloud &pointcloud,
-                                        base::MatrixXd &pointsVar);
+        base::Matrix3d computeFeaturesJacobian (const Eigen::Affine3d &deltaPose,
+                                            const Matcher::p_match &match);
+
+        void postProcessPointCloud (boost::circular_buffer< boost::unordered_map< int32_t, int32_t > >& hashIdx,
+                                    boost::unordered_map< int32_t, HashPoint > &hashPointcloudPrev,
+                                    boost::unordered_map< int32_t, HashPoint > &hashPointcloudCurr,
+                                    base::samples::Pointcloud &pointcloud);
 
     };
 }

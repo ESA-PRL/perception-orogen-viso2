@@ -158,6 +158,9 @@ bool StereoOdometer::configureHook()
     poseOut.invalidate();
     poseOut.sourceFrame = "CameraFrame_T";
     poseOut.targetFrame = "CameraFrame_0";
+    poseOut.orientation = Eigen::Quaterniond(Eigen::Matrix3d::Identity());
+    poseOut.position = Eigen::Vector3d::Zero();
+    poseOut.velocity = Eigen::Vector3d::Zero();
 
     /** Stereo working pair **/
     ::base::samples::frame::FramePair pair;
@@ -171,6 +174,8 @@ bool StereoOdometer::configureHook()
 
     /** Hash Table of indexes **/
     hashIdx.set_capacity(DEFAULT_CIRCULAR_BUFFER_SIZE);
+    hashPointcloudPrev.clear();
+    hashPointcloudCurr.clear();
 
     return true;
 }
@@ -202,13 +207,21 @@ void StereoOdometer::computeStereoOdometer()
 {
     uint8_t *l_image_data, *r_image_data;
 
+    /** Delta pose **/
+    base::samples::RigidBodyState deltaPoseOut;
+    Eigen::Affine3d deltaPose;
+    deltaPoseOut.invalidate();
+
     /** Get the images to plain pointers **/
     l_image_data = imagePair[0].first.getImagePtr();
     r_image_data = imagePair[0].second.getImagePtr();
     int32_t dims[] = {imagePair[0].first.size.width, imagePair[0].first.size.height, imagePair[0].first.size.width};
 
+    /** Compute visual odometry **/
+    bool success = viso->process (l_image_data, r_image_data, dims);
 
-    if (viso->process (l_image_data, r_image_data, dims) )
+    /** On success get the delta transform and update the pose **/
+    if (success)
     {
         Matrix deltaPoseViso2 =  Matrix::inv(viso->getMotion());
 
@@ -220,12 +233,12 @@ void StereoOdometer::computeStereoOdometer()
             for (register int j=0; j<4; j++)
                     mdata[k++] = deltaPoseViso2.val[j][i];
         deltaM = Eigen::Map<const Eigen::Matrix4d> (&(mdata[0]), 4, 4);
-        Eigen::Affine3d deltaPose; deltaPose.matrix() = deltaM;
+        deltaPose.matrix() = deltaM;
 
-        /** on success, update current pose **/
+        /** On success, update current pose **/
         pose = pose * deltaPose;
 
-        /** output some statistics **/
+        /** Output some statistics **/
         double num_matches = viso->getNumberOfMatches();
         double num_inliers = viso->getNumberOfInliers();
         #ifdef DEBUG_PRINTS
@@ -242,7 +255,7 @@ void StereoOdometer::computeStereoOdometer()
         poseOut.position = pose.translation();
         #ifdef DEBUG_PRINTS
         std::cout << "Orientation (Quaternion): "<< attitude.w()<<","<<attitude.x()<<","<<attitude.y()<<","<<attitude.z()<<"\n";
-        Eigen::Vector3d euler; /** In euler angles **/
+        Eigen::Vector3d euler; /** In Euler angles **/
         euler[2] = attitude.toRotationMatrix().eulerAngles(2,1,0)[0];//YAW
         euler[1] = attitude.toRotationMatrix().eulerAngles(2,1,0)[1];//PITCH
         euler[0] = attitude.toRotationMatrix().eulerAngles(2,1,0)[2];//ROLL
@@ -250,50 +263,56 @@ void StereoOdometer::computeStereoOdometer()
         std::cout << "Position:\n"<< poseOut.position<<"\n";
         #endif
 
-        _pose_samples_out.write(poseOut);
-
-        if (_output_debug.value())
-        {
-            /** Draw matches in the images using the FrameHelper which internally uses openCV **/
-            ::base::samples::frame::Frame *frame_ptr = intraFrame_out.write_access();
-            this->drawMatches (imagePair[0].first, imagePair[0].second, viso->getMatches(), viso->getInlierIndices(), *frame_ptr);
-
-            frame_ptr->time = imagePair[0].time;
-            intraFrame_out.reset(frame_ptr);
-            #ifdef DEBUG_PRINTS
-            std::cout<<"frame_ptr: "<<frame_ptr<<"\n";
-            std::cout<<"frame size: "<<frame_ptr->size.width*frame_ptr->size.height<<"\n";
-            #endif
-            _intra_frame_samples_out.write(intraFrame_out);
-
-        }
-
-        /** Create the point cloud **/
-        ::base::MatrixXd pointsVar;
-        this->createPointCloud(leftColorImage, viso->getMatches(), viso->getInlierIndices(), Q, pointcloud, pointsVar);
-
-        if (hashIdx.size() > 1)
-        {
-            /** Re-arrange the point cloud and compute the uncertainty **/
-            this->orderPointCloudAndUncertainty (hashIdx, pointcloud, pointsVar);
-        }
-        else
-            std::cout<<"First Point cloud\n";
-
-        /** Port out the information (current point cloud is at the vector front) **/
-        _point_cloud_samples_out.write(pointcloud);
-        _point_cloud_variance_out.write(pointsVar);
-
-        /** Compute Features Jacobian **/
-        base::MatrixXd featuresJacob = computeFeaturesJacobian(deltaPose, viso->getMatches(), viso->getInlierIndices());
-        _point_cloud_jacobian_out.write(featuresJacob);
+        /** Fill the delta pose out **/
+        Eigen::Quaternion<double> deltaAttitude(deltaPose.rotation());
+        deltaPoseOut.time = imagePair[0].time;
+        deltaPoseOut.orientation = deltaAttitude;
+        deltaPoseOut.position = deltaPose.translation();
 
     }
     else
     {
         RTT::log(RTT::Warning) << "[VISO2] Stereo Odometer failed!!" << RTT::endlog();
+        deltaPoseOut.time = imagePair[0].time;
+        std::cout<<"Matches size: "<<viso->getMatches().size()<<"\n";
+
     }
 
+    /** Port out the delta pose **/
+    _delta_pose_samples_out.write(deltaPoseOut);
+
+    /** Port out the accumulated pose **/
+    _pose_samples_out.write(poseOut);
+
+    if (_output_debug.value())
+    {
+        /** Draw matches in the images using the FrameHelper which internally uses openCV **/
+        ::base::samples::frame::Frame *frame_ptr = intraFrame_out.write_access();
+        this->drawMatches (imagePair[0].first, imagePair[0].second, viso->getMatches(), viso->getInlierIndices(), *frame_ptr);
+
+        frame_ptr->time = imagePair[0].time;
+        intraFrame_out.reset(frame_ptr);
+        #ifdef DEBUG_PRINTS
+        std::cout<<"frame_ptr: "<<frame_ptr<<"\n";
+        std::cout<<"frame size: "<<frame_ptr->size.width*frame_ptr->size.height<<"\n";
+        #endif
+        _intra_frame_samples_out.write(intraFrame_out);
+
+    }
+
+
+    /** Create the point cloud from the current pair **/
+    this->createPointCloud(leftColorImage, viso->getMatches(),
+                        viso->getInlierIndices(), Q, deltaPose, hashIdx, hashPointcloudPrev, hashPointcloudCurr);
+
+    /** Re-arrange the point cloud and compute the uncertainty **/
+    base::samples::Pointcloud pointcloud;
+    this->postProcessPointCloud (hashIdx, hashPointcloudPrev, hashPointcloudCurr, pointcloud);
+
+    /** Port out the information (current point cloud is at the vector front) **/
+    _point_cloud_samples_out.write(pointcloud);
+    //_point_cloud_variance_out.write(pointsVar);
+    //_point_cloud_jacobian_out.write(featuresJacob);
 
     return;
 }
@@ -356,74 +375,78 @@ void StereoOdometer::createDistanceImage(const base::samples::frame::Frame &imag
 void StereoOdometer::createPointCloud(const base::samples::frame::Frame &image1,
                         const std::vector<Matcher::p_match> &matches,
                         const std::vector<int32_t>& inlier_indices,
-                        const Eigen::Matrix4d &Q, 
-                        ::base::samples::Pointcloud &pointcloud,
-                        ::base::MatrixXd &pointsVar)
+                        const Eigen::Matrix4d &Q,
+                        const Eigen::Affine3d &deltaPose,
+                        boost::circular_buffer< boost::unordered_map< int32_t, int32_t > >&hashIdx,
+                        boost::unordered_map< int32_t, HashPoint > &hashPointcloudPrev,
+                        boost::unordered_map< int32_t, HashPoint > &hashPointcloudCurr)
 {
 
-    boost::unordered_map< int32_t, int32_t > hashTable;
+    boost::unordered_map< int32_t, int32_t > localHashIdx;
 
     /** Image for the colored points **/
     cv::Mat cv_image1 = frame_helper::FrameHelper::convertToCvMat(image1);
 
-    /** Size the point cloud **/
-//    pointcloud.idx.resize(inlier_indices.size());
-    pointcloud.points.resize(inlier_indices.size());
-    pointcloud.colors.resize(inlier_indices.size());
-
-    /** Size the variance matrices **/
-    pointsVar.resize(3, 3*inlier_indices.size());
+    /** Clear hash tables **/
+    hashPointcloudPrev.clear();
+    hashPointcloudCurr.clear();
 
     /** Uncertainty in the images (left and right) planes **/
     Eigen::Matrix4d pxVar;
     pxVar << pxleftVar, Eigen::Matrix2d::Zero(),
         Eigen::Matrix2d::Zero(), pxrightVar;
 
-    for (register size_t i = 0; i < inlier_indices.size(); ++i)
+    /** Create the hast table with the point cloud **/
+    for (register size_t i = 0; i <inlier_indices .size(); ++i)
     {
         const Matcher::p_match& match = matches[inlier_indices[i]];
+        HashPoint hashPoint;
 
-        std::cout<<"Feature Idx (current L): "<<match.i1c<<" (current R): "<<match.i2c <<"\n";
-        std::cout<<"Feature Idx (previous L): "<<match.i1p<<" (previous R): "<<match.i2p <<"\n";
+        std::cout<<"****\n Match ["<<i<<"] Idx (current L): "<<match.i1c<<" (current R): "<<match.i2c <<"\n";
+        std::cout<<"Match ["<<i<<"] Idx (previous L): "<<match.i1p<<" (previous R): "<<match.i2p <<"\n";
 
-       // std::cout<<"match["<<i<<"] "<<match.u1c <<" "<<match.u2c<<"\n";
+        /** 3D Point **/
         ::base::Vector3d point (match.u1c + Q(0,3),  match.v1c + Q(1,3), Q(2,3));
        // std::cout<<"point["<<i<<"] "<<point[0] <<" "<<point[1]<<" "<<point[2]<<"\n";
         double disparity = match.u1c - match.u2c;
         double W  = Q(3,2)*disparity + Q(3,3);
         point = point * (1.0/W);
         std::cout<<"3dpoint["<<i<<"] "<<point[0] <<" "<<point[1]<<" "<<point[2]<<"\n";
-        pointcloud.points[i] = point;
+        hashPoint.point = point;
+
+        /** Color **/
         cv::Vec3f color = cv_image1.at<cv::Vec3b>(match.v1c, match.u1c);
         ::base::Vector4d color4d;
         color4d[0] = color[0]/255.0;//R
         color4d[1] = color[1]/255.0;//G
         color4d[2] = color[2]/255.0;//B
         color4d[3] = 1.0;//Alpha
-        pointcloud.colors[i] = color4d;
+        hashPoint.color = color4d;
 
         /** Uncertainty information **/
         Eigen::Matrix<double, 3, 4> noiseJacobian; /** Jacobian Matrix for the triangulation noise model */
         double disparityPower = pow(disparity,2);
 
-        /** Noise Jacobian **/
         noiseJacobian <<  -(viso2param.base*match.u2c)/disparityPower, 0, (viso2param.base*match.u1c)/disparityPower, 0.00,
                 -(viso2param.base*match.v1c)/disparityPower, viso2param.base/disparity, (viso2param.base*match.v1c)/disparityPower, 0,
                 -(viso2param.base*viso2param.calib.f)/disparityPower, 0,  (viso2param.base*viso2param.calib.f )/disparityPower, 0;
 
-        pointsVar.block<3,3> (0, 3*i) = noiseJacobian * pxVar * noiseJacobian.transpose();
+        hashPoint.variance = noiseJacobian * pxVar * noiseJacobian.transpose();
+        std::cout<<"Point var:\n"<<hashPoint.variance <<"\n";
 
-        std::cout<<"Point var:\n"<<pointsVar.block<3,3> (0, 3*i) <<"\n";
+        /** Compute Jacobian **/
+        hashPoint.jacobian = computeFeaturesJacobian (deltaPose, match);
 
-        /** Feature index get the idx from the feature in the current left **/
-//        pointcloud.idx[i] = match.i1c;
+        /** Add key to the hash Point cloud **/
+        hashPointcloudPrev.insert(std::make_pair(match.i1p, hashPoint));
+        hashPointcloudCurr.insert(std::make_pair(match.i1c, hashPoint));
 
-        /** Add key to the hash table **/
-        hashTable.insert(std::make_pair(match.i1c, match.i1p));
-
+        /** Feature index get the index for the previous left **/
+        localHashIdx.insert(std::make_pair(match.i1p, match.i1c));
     }
 
-    hashIdx.push_front(hashTable);
+    hashIdx.push_front(localHashIdx);
+
 }
 
 
@@ -473,13 +496,9 @@ Eigen::Matrix<double,3,3> drx_by_dr( const Eigen::Quaterniond& q, const Eigen::V
 }
 
 
-base::MatrixXd StereoOdometer::computeFeaturesJacobian (const Eigen::Affine3d &deltaPose,
-                                    const std::vector<Matcher::p_match> &matches,
-                                    const std::vector<int32_t>& inlier_indices)
+base::Matrix3d StereoOdometer::computeFeaturesJacobian (const Eigen::Affine3d &deltaPose, const Matcher::p_match &match)
 {
-    base::MatrixXd J;
-    J.resize(3, 3*inlier_indices.size());
-    J.setZero();
+    base::Matrix3d J;
 
     /** Get the delta 6D vector **/
     Eigen::Quaternion<double> q(deltaPose.rotation());
@@ -498,37 +517,68 @@ base::MatrixXd StereoOdometer::computeFeaturesJacobian (const Eigen::Affine3d &d
 //    Eigen::Matrix<double, 6, 3> deltaF;
 //    deltaF << Eigen::Matrix3d::Identity(), drx_by_dr(q, deltaPose.translation());
 
-    for (register size_t i = 0; i < inlier_indices.size(); ++i)
-    {
-        /** Experimental **/
-        J.block<3,3> (0,3*i) = deltaPose.rotation();
+    /** Experimental **/
+    J = deltaPose.rotation();
 
-    }
 
     return J;
 }
 
-void StereoOdometer::orderPointCloudAndUncertainty(boost::circular_buffer< boost::unordered_map< int32_t, int32_t > >& hashIdx,
-                                        base::samples::Pointcloud &pointcloud,
-                                        base::MatrixXd &pointsVar)
+void StereoOdometer::postProcessPointCloud (boost::circular_buffer< boost::unordered_map< int32_t, int32_t > >& hashIdx,
+                                    boost::unordered_map< int32_t, HashPoint > &hashPointcloudPrev,
+                                    boost::unordered_map< int32_t, HashPoint > &hashPointcloudCurr,
+                                    base::samples::Pointcloud &pointcloud)
 {
 
-    base::samples::Pointcloud orderedPointcloud;
-    base::MatrixXd orderedPointsVar;
 
-//    orderedPointcloud.idx.resize(pointcloud.points.size());
-    orderedPointcloud.points.resize(pointcloud.points.size());
-    orderedPointcloud.colors.resize(pointcloud.points.size());
+    std::cout<<"hashIdx[0] is: "<< hashIdx[0].size()<<"\n";
+    std::cout<<"hashIdx[1] is: "<< hashIdx[1].size()<<"\n";
 
-    for (register size_t i = 0; i < pointcloud.points.size(); ++i)
+    if (hashIdx.size() == 1)
     {
-//            const Matcher::p_match& match = matches[inlier_indices[i]];
-//        std::cout<<"Hash0["<<i<<"]at["<<pointcloud.idx[i]<<"]: "<< hashIdx[0].at(pointcloud.idx[i])<<"\n";
-//        std::cout<<"Hash1["<<i<<"]at["<<pointcloud.idx[i]<<"]: "<< hashIdx[1].at(pointcloud.idx[i])<<"\n";
-
-//        pointcloud.idx[i] = hashIdx[0].at(pointcloud.idx[i]);
+        std::cout<<"REQUIRED AT LEAST 4 IMAGES\n";
+        return;
     }
 
+    if (hashIdx[1].size() == 0)
+    {
+        std::cout<<"FIRST TIME\n";
+        boost::unordered_map< int32_t, int32_t > localHashIdx;
+
+        for(boost::unordered_map<int32_t, int32_t>::iterator it = hashIdx[0].begin(); it != hashIdx[0].end(); ++it)
+        {
+           localHashIdx.insert(std::make_pair(it->first, it->first));
+        }
+        hashIdx[1] = localHashIdx;
+    }
+
+    std::cout<<"hashIdx[0] is: "<< hashIdx[0].size()<<"\n";
+    std::cout<<"hashIdx[1] is: "<< hashIdx[1].size()<<"\n";
+
+
+    pointcloud.points.resize(hashIdx[1].size());
+    pointcloud.colors.resize(hashIdx[1].size());
+
+    register size_t index = 0;
+    for(boost::unordered_map<int32_t, int32_t>::iterator it = hashIdx[1].begin(); it != hashIdx[1].end(); ++it)
+    {
+        if (hashPointcloudPrev.find(it->second) != hashPointcloudPrev.end())
+        {
+            HashPoint point = hashPointcloudPrev.at(it->second);
+            pointcloud.points[index] = point.point;
+            pointcloud.colors[index] = point.color;
+
+            std::cout<<"FOUND PREV["<<index<<"]: "<<it->first<<" -> "<<it->second<<" point: "<<point.point[0]<<" "<<point.point[1]<<" "<<point.point[2]<<"\n";
+
+        }
+        else
+        {
+            std::cout<<"NOT FOUND\n";
+            pointcloud.points[index] = base::Vector3d::Zero();
+            pointcloud.colors[index] = base::Vector4d::Zero();
+        }
+        index++;
+    }
 
     return;
 }
