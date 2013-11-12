@@ -2,7 +2,7 @@
 
 #include "StereoOdometer.hpp"
 
-#define DEBUG_PRINTS 1
+//#define DEBUG_PRINTS 1
 
 #ifndef D2R
 #define D2R M_PI/180.00 /** Convert degree to radian **/
@@ -31,8 +31,10 @@ void StereoOdometer::left_frameCallback(const base::Time &ts, const ::RTT::extra
 {
     imagePair[0].first.time = left_frame_sample->time; //time of the left image
 
-    //RTT::log(RTT::Warning) << "[VISO2 LEFT_FRAME] Frame arrived at: " <<left_frame_sample->time.toMicroseconds()<< RTT::endlog();
-    std::cout << "[VISO2 LEFT_FRAME] Frame arrived at: " <<left_frame_sample->time.toMicroseconds()<< std::endl;
+    #ifdef DEBUG_PRINTS
+    RTT::log(RTT::Warning) << "[VISO2 LEFT_FRAME] Frame arrived at: " <<left_frame_sample->time.toMicroseconds()<< RTT::endlog();
+    //std::cout << "[VISO2 LEFT_FRAME] Frame arrived at: " <<left_frame_sample->time.toMicroseconds()<< std::endl;
+    #endif
 
     /** The image need to be in gray scale and undistorted **/
     imagePair[0].first.frame_mode = base::samples::frame::MODE_GRAYSCALE;
@@ -68,8 +70,10 @@ void StereoOdometer::right_frameCallback(const base::Time &ts, const ::RTT::extr
 
     imagePair[0].second.time = right_frame_sample->time; //time stamp for the right image
 
-    //RTT::log(RTT::Warning) << "[VISO2 RIGHT_FRAME] Frame arrived at: " <<right_frame_sample->time.toMicroseconds()<< RTT::endlog();
-    std::cout<< "[VISO2 RIGHT_FRAME] Frame arrived at: " <<right_frame_sample->time.toMicroseconds()<<std::endl;
+    #ifdef DEBUG_PRINTS
+    RTT::log(RTT::Warning) << "[VISO2 RIGHT_FRAME] Frame arrived at: " <<right_frame_sample->time.toMicroseconds()<< RTT::endlog();
+    //std::cout<< "[VISO2 RIGHT_FRAME] Frame arrived at: " <<right_frame_sample->time.toMicroseconds()<<std::endl;
+    #endif
 
     /** Correct distortion in image right **/
     imagePair[0].second.frame_mode = base::samples::frame::MODE_GRAYSCALE;
@@ -173,9 +177,7 @@ bool StereoOdometer::configureHook()
     intraFrame = NULL;
 
     /** Hash Table of indexes **/
-    hashIdx.set_capacity(DEFAULT_CIRCULAR_BUFFER_SIZE);
-    hashPointcloudPrev.clear();
-    hashPointcloudCurr.clear();
+    hashPointcloud.set_capacity(DEFAULT_CIRCULAR_BUFFER_SIZE);
 
     return true;
 }
@@ -239,9 +241,9 @@ void StereoOdometer::computeStereoOdometer()
         pose = pose * deltaPose;
 
         /** Output some statistics **/
+        #ifdef DEBUG_PRINTS
         double num_matches = viso->getNumberOfMatches();
         double num_inliers = viso->getNumberOfInliers();
-        #ifdef DEBUG_PRINTS
         std::cout << ", Matches: " << num_matches;
         std::cout << ", Inliers: " << num_inliers;
         std::cout << ", Inliers Ratio: " << 100.0*num_inliers/num_matches << " %" << ", Current pose: " << std::endl;
@@ -274,8 +276,6 @@ void StereoOdometer::computeStereoOdometer()
     {
         RTT::log(RTT::Warning) << "[VISO2] Stereo Odometer failed!!" << RTT::endlog();
         deltaPoseOut.time = imagePair[0].time;
-        std::cout<<"Matches size: "<<viso->getMatches().size()<<"\n";
-
     }
 
     /** Port out the delta pose **/
@@ -303,16 +303,26 @@ void StereoOdometer::computeStereoOdometer()
 
     /** Create the point cloud from the current pair **/
     this->createPointCloud(leftColorImage, viso->getMatches(),
-                        viso->getInlierIndices(), Q, deltaPose, hashIdx, hashPointcloudPrev, hashPointcloudCurr);
+                        viso->getInlierIndices(), Q, deltaPose, hashIdx, hashPointcloud);
 
     /** Re-arrange the point cloud and compute the uncertainty **/
     base::samples::Pointcloud pointcloud;
-    this->postProcessPointCloud (hashIdx, hashPointcloudPrev, hashPointcloudCurr, pointcloud);
+    base::MatrixXd pointsVar, deltaJacobCurr, deltaJacobPrev;
+    this->postProcessPointCloud (hashIdx, hashPointcloud, pointcloud, pointsVar, deltaJacobCurr, deltaJacobPrev);
 
-    /** Port out the information (current point cloud is at the vector front) **/
+    /** Port out the information **/
+    pointcloud.time = imagePair[0].time;
     _point_cloud_samples_out.write(pointcloud);
-    //_point_cloud_variance_out.write(pointsVar);
-    //_point_cloud_jacobian_out.write(featuresJacob);
+    _point_cloud_uncertainty_out.write(pointsVar);
+    _delta_pose_jacobians_current_out.write(deltaJacobCurr);
+    _delta_pose_jacobians_previous_out.write(deltaJacobPrev);
+
+
+    #ifdef DEBUG_PRINTS
+    std::cout<<"Jacobian Current is "<<deltaJacobCurr.rows()<<" x "<<deltaJacobCurr.cols()<<"\n";
+    std::cout<<"Jacobian Previous is "<<deltaJacobPrev.rows()<<" x "<<deltaJacobPrev.cols()<<"\n";
+    std::cout<<"Uncertainty is "<<pointsVar.rows()<<" x "<<pointsVar.cols()<<"\n";
+    #endif
 
     return;
 }
@@ -336,8 +346,10 @@ void StereoOdometer::drawMatches(const base::samples::frame::Frame &image1,
     for (size_t i = 0; i < inlier_indices.size(); ++i)
     {
         const Matcher::p_match& match = matches[inlier_indices[i]];
+        #ifdef DEBUG_PRINTS
        // std::cout<<"[drawMatches] match1 "<< match.u1c << " " << match.v1c<<"\n";
        // std::cout<<"[drawMatches] match2 "<< match.u2c << " " << match.v2c<<"\n";
+        #endif
         cv::KeyPoint k1 (static_cast<float>(match.u1c), static_cast<float>(match.v1c), 1);
         cv::KeyPoint k2 (static_cast<float>(match.u2c), static_cast<float>(match.v2c), 1);
         float disparity = static_cast<float>(match.u1c) - static_cast<float>(match.u2c);
@@ -377,19 +389,16 @@ void StereoOdometer::createPointCloud(const base::samples::frame::Frame &image1,
                         const std::vector<int32_t>& inlier_indices,
                         const Eigen::Matrix4d &Q,
                         const Eigen::Affine3d &deltaPose,
-                        boost::circular_buffer< boost::unordered_map< int32_t, int32_t > >&hashIdx,
-                        boost::unordered_map< int32_t, HashPoint > &hashPointcloudPrev,
-                        boost::unordered_map< int32_t, HashPoint > &hashPointcloudCurr)
+                        boost::unordered_map< int32_t, int32_t > &hashIdx,
+                        boost::circular_buffer< std::map < int32_t, HashPoint, std::less<int32_t>,
+                                    Eigen::aligned_allocator< std::pair < const int32_t, HashPoint > > > > &hashPointcloud)
 {
 
     boost::unordered_map< int32_t, int32_t > localHashIdx;
+    boost::unordered_map< int32_t, HashPoint > localHashPointcloud;
 
     /** Image for the colored points **/
     cv::Mat cv_image1 = frame_helper::FrameHelper::convertToCvMat(image1);
-
-    /** Clear hash tables **/
-    hashPointcloudPrev.clear();
-    hashPointcloudCurr.clear();
 
     /** Uncertainty in the images (left and right) planes **/
     Eigen::Matrix4d pxVar;
@@ -402,21 +411,23 @@ void StereoOdometer::createPointCloud(const base::samples::frame::Frame &image1,
         const Matcher::p_match& match = matches[inlier_indices[i]];
         HashPoint hashPoint;
 
+        #ifdef DEBUG_PRINTS
         std::cout<<"****\n Match ["<<i<<"] Idx (current L): "<<match.i1c<<" (current R): "<<match.i2c <<"\n";
         std::cout<<"Match ["<<i<<"] Idx (previous L): "<<match.i1p<<" (previous R): "<<match.i2p <<"\n";
+        #endif
 
         /** 3D Point **/
-        ::base::Vector3d point (match.u1c + Q(0,3),  match.v1c + Q(1,3), Q(2,3));
+        base::Vector3d point (match.u1c + Q(0,3),  match.v1c + Q(1,3), Q(2,3));
        // std::cout<<"point["<<i<<"] "<<point[0] <<" "<<point[1]<<" "<<point[2]<<"\n";
         double disparity = match.u1c - match.u2c;
         double W  = Q(3,2)*disparity + Q(3,3);
         point = point * (1.0/W);
-        std::cout<<"3dpoint["<<i<<"] "<<point[0] <<" "<<point[1]<<" "<<point[2]<<"\n";
+        //std::cout<<"3dpoint["<<i<<"] "<<point[0] <<" "<<point[1]<<" "<<point[2]<<"\n";
         hashPoint.point = point;
 
         /** Color **/
         cv::Vec3f color = cv_image1.at<cv::Vec3b>(match.v1c, match.u1c);
-        ::base::Vector4d color4d;
+        base::Vector4d color4d;
         color4d[0] = color[0]/255.0;//R
         color4d[1] = color[1]/255.0;//G
         color4d[2] = color[2]/255.0;//B
@@ -432,20 +443,36 @@ void StereoOdometer::createPointCloud(const base::samples::frame::Frame &image1,
                 -(viso2param.base*viso2param.calib.f)/disparityPower, 0,  (viso2param.base*viso2param.calib.f )/disparityPower, 0;
 
         hashPoint.variance = noiseJacobian * pxVar * noiseJacobian.transpose();
+
+        #ifdef DEBUG_PRINTS
         std::cout<<"Point var:\n"<<hashPoint.variance <<"\n";
+        #endif
 
         /** Compute Jacobian **/
         hashPoint.jacobian = computeFeaturesJacobian (deltaPose, match);
 
         /** Add key to the hash Point cloud **/
-        hashPointcloudPrev.insert(std::make_pair(match.i1p, hashPoint));
-        hashPointcloudCurr.insert(std::make_pair(match.i1c, hashPoint));
+        localHashPointcloud.insert(std::make_pair(match.i1c, hashPoint));
 
-        /** Feature index get the index for the previous left **/
-        localHashIdx.insert(std::make_pair(match.i1p, match.i1c));
+        /** Feature index **/
+        localHashIdx.insert(std::make_pair(match.i1c, match.i1p));
     }
 
-    hashIdx.push_front(localHashIdx);
+    /** Assign the index hash **/
+    hashIdx = localHashIdx;
+
+    /** Order the point cloud **/
+    std::map < int32_t, HashPoint, std::less<int32_t>,
+        Eigen::aligned_allocator< std::pair < const int32_t, HashPoint > > > orderedPointcloud;
+    std::map<int32_t, int32_t> orderedIdx(localHashIdx.begin(), localHashIdx.end());
+    for(std::map<int32_t, int32_t>::iterator it = orderedIdx.begin(); it !=orderedIdx.end(); ++it)
+    {
+        HashPoint point = localHashPointcloud.at(it->first);
+
+        orderedPointcloud[it->first] = point;
+
+    }
+    hashPointcloud.push_front(orderedPointcloud);
 
 }
 
@@ -524,61 +551,79 @@ base::Matrix3d StereoOdometer::computeFeaturesJacobian (const Eigen::Affine3d &d
     return J;
 }
 
-void StereoOdometer::postProcessPointCloud (boost::circular_buffer< boost::unordered_map< int32_t, int32_t > >& hashIdx,
-                                    boost::unordered_map< int32_t, HashPoint > &hashPointcloudPrev,
-                                    boost::unordered_map< int32_t, HashPoint > &hashPointcloudCurr,
-                                    base::samples::Pointcloud &pointcloud)
+void StereoOdometer::postProcessPointCloud (boost::unordered_map< int32_t, int32_t > & hashIdx,
+                                    boost::circular_buffer< std::map < int32_t, HashPoint, std::less<int32_t>,
+                                        Eigen::aligned_allocator< std::pair < const int32_t, HashPoint > > > > &hashPointcloud,
+                                    base::samples::Pointcloud &pointcloud,
+                                    base::MatrixXd &pointsVar,
+                                    base::MatrixXd &deltaJacobCurr,
+                                    base::MatrixXd &deltaJacobPrev)
 {
 
 
-    std::cout<<"hashIdx[0] is: "<< hashIdx[0].size()<<"\n";
-    std::cout<<"hashIdx[1] is: "<< hashIdx[1].size()<<"\n";
+    #ifdef DEBUG_PRINTS
+    std::cout<<"hashIdx has size: "<< hashIdx.size()<<"\n";
+    #endif
 
-    if (hashIdx.size() == 1)
+    if (hashIdx.size() == 0)
     {
-        std::cout<<"REQUIRED AT LEAST 4 IMAGES\n";
+        #ifdef DEBUG_PRINTS
+        std::cout<<"TWO FIRST IMAGES: IT REQUIRED AT LEAST 4 IMAGES\n";
+        #endif
         return;
     }
 
-    if (hashIdx[1].size() == 0)
-    {
-        std::cout<<"FIRST TIME\n";
-        boost::unordered_map< int32_t, int32_t > localHashIdx;
-
-        for(boost::unordered_map<int32_t, int32_t>::iterator it = hashIdx[0].begin(); it != hashIdx[0].end(); ++it)
-        {
-           localHashIdx.insert(std::make_pair(it->first, it->first));
-        }
-        hashIdx[1] = localHashIdx;
-    }
-
-    std::cout<<"hashIdx[0] is: "<< hashIdx[0].size()<<"\n";
-    std::cout<<"hashIdx[1] is: "<< hashIdx[1].size()<<"\n";
-
-
-    pointcloud.points.resize(hashIdx[1].size());
-    pointcloud.colors.resize(hashIdx[1].size());
+    pointcloud.points.resize(hashPointcloud[0].size());
+    pointcloud.colors.resize(hashPointcloud[0].size());
+    pointsVar.resize(3, 3*hashPointcloud[0].size());
+    deltaJacobCurr.resize(3, 3*hashPointcloud[0].size());
+    deltaJacobPrev.resize(3, 3*hashPointcloud[1].size());
 
     register size_t index = 0;
-    for(boost::unordered_map<int32_t, int32_t>::iterator it = hashIdx[1].begin(); it != hashIdx[1].end(); ++it)
+    register size_t indexPrev = 0;
+    for(std::map<int32_t, HashPoint>::iterator it = hashPointcloud[0].begin(); it != hashPointcloud[0].end(); ++it)
     {
-        if (hashPointcloudPrev.find(it->second) != hashPointcloudPrev.end())
+        int32_t prevIdx = hashIdx.at(it->first);
+
+        /** The point to the point cloud **/
+        HashPoint point = it->second;
+        pointcloud.points[index] = point.point;
+        pointcloud.colors[index] = point.color;
+        #ifdef DEBUG_PRINTS
+        std::cout<<"IDX["<<index<<"]: "<<it->first<<" -> "<<prevIdx<<"\n";
+        std::cout<<"POINT: "<<point.point[0]<<" "<<point.point[1]<<" "<<point.point[2]<<"\n";
+        #endif
+
+        /** The uncertainty of the current points **/
+        pointsVar.block<3, 3>(0,3*index) = point.variance;
+
+        /** Look in the previous point cloud **/
+        if (hashPointcloud[1].find(prevIdx) != hashPointcloud[1].end())
         {
-            HashPoint point = hashPointcloudPrev.at(it->second);
-            pointcloud.points[index] = point.point;
-            pointcloud.colors[index] = point.color;
+            #ifdef DEBUG_PRINTS
+            HashPoint pointPrev = hashPointcloud[1][prevIdx];
+            std::cout<<"FOUND PREV: "<<pointPrev.point[0]<<" "<<pointPrev.point[1]<<" "<<pointPrev.point[2]<<"\n";
+            #endif
 
-            std::cout<<"FOUND PREV["<<index<<"]: "<<it->first<<" -> "<<it->second<<" point: "<<point.point[0]<<" "<<point.point[1]<<" "<<point.point[2]<<"\n";
+            /** Get the Jacobian **/
+            deltaJacobCurr.block<3,3>(0,3*index) = point.jacobian;
+            deltaJacobPrev.block<3,3>(0,3*indexPrev) = point.jacobian.inverse();
 
+            indexPrev++;
         }
         else
         {
+            #ifdef DEBUG_PRINTS
             std::cout<<"NOT FOUND\n";
-            pointcloud.points[index] = base::Vector3d::Zero();
-            pointcloud.colors[index] = base::Vector4d::Zero();
+            #endif
+
+            /** Set the Jacobian **/
+            deltaJacobCurr.block<3,3>(0,3*index).setZero();
+
         }
         index++;
     }
+
 
     return;
 }

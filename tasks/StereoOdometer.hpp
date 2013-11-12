@@ -15,6 +15,10 @@
 #include "frame_helper/FrameHelperTypes.h" /** Types for FrameHelper **/
 #include "frame_helper/Calibration.h" /** Rock type for camera calibration parameters **/
 
+/** Standard **/
+#include <vector>
+#include <map>
+
 /** Boost **/
 #include <boost/shared_ptr.hpp> /** For shared pointers **/
 #include <boost/circular_buffer.hpp> /** For circular buffers **/
@@ -24,6 +28,8 @@
 #include <viso2/matrix.h>
 #include <viso2/viso_stereo.h>
 
+/** Eigen **/
+#include<Eigen/StdVector>
 
 namespace viso2 {
 
@@ -31,7 +37,7 @@ namespace viso2 {
     struct HashPoint
     {
         int32_t p_Idx; /* Previous left frame idx **/
-        base::Point point;
+        base::Vector3d point;
         base::Vector4d color;
         base::Matrix3d variance;
         base::Matrix3d jacobian;
@@ -55,6 +61,9 @@ namespace viso2 {
     class StereoOdometer : public StereoOdometerBase
     {
 	friend class StereoOdometerBase;
+
+    public:
+        EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
     protected:
         static const int DEFAULT_CIRCULAR_BUFFER_SIZE = 2;
@@ -80,10 +89,9 @@ namespace viso2 {
         Eigen::Matrix4d Q; /** Re-projection matrix **/
         ::base::samples::frame::Frame leftColorImage;/** coloring point clouds (if selected) */
         ::base::Matrix2d pxleftVar, pxrightVar; /** Error variance of image plane in pixel units **/
-        std::vector<int32_t> pastInliers;
-        boost::circular_buffer< boost::unordered_map< int32_t, int32_t > > hashIdx;
-        boost::unordered_map< int32_t, HashPoint > hashPointcloudCurr;
-        boost::unordered_map< int32_t, HashPoint > hashPointcloudPrev;
+        boost::unordered_map< int32_t, int32_t > hashIdx; /** current to previous index **/
+        boost::circular_buffer< std::map < int32_t, HashPoint, std::less<int32_t>,
+            Eigen::aligned_allocator< std::pair < const int32_t, HashPoint > > > > hashPointcloud;
 
         /***************************/
         /** Output Port Variables **/
@@ -91,8 +99,6 @@ namespace viso2 {
         Eigen::Affine3d pose; /** Accumulated pose **/
         base::samples::RigidBodyState poseOut; /** Accumulated pose **/
         RTT::extras::ReadOnlyPointer<base::samples::frame::Frame> intraFrame_out; /** Debug intra frame image **/
-        base::samples::Pointcloud pointcloud; /** Point cloud for the port out **/
-
 
     protected:
 
@@ -191,18 +197,20 @@ namespace viso2 {
                         const std::vector<int32_t>& inlier_indices,
                         const Eigen::Matrix4d &Q,
                         const Eigen::Affine3d &deltaPose,
-                        boost::circular_buffer< boost::unordered_map< int32_t, int32_t > > &hashIdx,
-                        boost::unordered_map< int32_t, HashPoint > &hashPointcloudPrev,
-                        boost::unordered_map< int32_t, HashPoint > &hashPointcloudCurr);
-
+                        boost::unordered_map< int32_t, int32_t > &hashIdx,
+                        boost::circular_buffer< std::map < int32_t, HashPoint, std::less<int32_t>,
+                                    Eigen::aligned_allocator< std::pair < const int32_t, HashPoint > > > > &hashPointcloud);
 
         base::Matrix3d computeFeaturesJacobian (const Eigen::Affine3d &deltaPose,
                                             const Matcher::p_match &match);
 
-        void postProcessPointCloud (boost::circular_buffer< boost::unordered_map< int32_t, int32_t > >& hashIdx,
-                                    boost::unordered_map< int32_t, HashPoint > &hashPointcloudPrev,
-                                    boost::unordered_map< int32_t, HashPoint > &hashPointcloudCurr,
-                                    base::samples::Pointcloud &pointcloud);
+        void postProcessPointCloud (boost::unordered_map< int32_t, int32_t > & hashIdx,
+                                    boost::circular_buffer< std::map < int32_t, HashPoint, std::less<int32_t>,
+                                        Eigen::aligned_allocator< std::pair < const int32_t, HashPoint > > > > &hashPointcloud,
+                                    base::samples::Pointcloud &pointcloud,
+                                    base::MatrixXd &pointsVar,
+                                    base::MatrixXd &deltaJacobCurr,
+                                    base::MatrixXd &deltaJacobPrev);
 
     };
 }

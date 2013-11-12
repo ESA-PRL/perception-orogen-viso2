@@ -89,14 +89,17 @@ task_context "StereoOdometer" do
     output_port("delta_pose_samples_out", "/base/samples/RigidBodyState").
         doc "Delta estimated left camera pose."
 
+    output_port("delta_pose_jacobians_current_out", "base::MatrixXd").
+        doc "Jacobian of 3D images features."
+
+    output_port("delta_pose_jacobians_previous_out", "base::MatrixXd").
+        doc "Jacobian of 3D images features."
+
     output_port("point_cloud_samples_out",  'base::samples::Pointcloud').
         doc 'Point Cloud representation of the 3D features.'
 
-    output_port("point_cloud_jacobian_out", "base::MatrixXd").
-        doc "Jacobian of 3D images features."
-
-    output_port("point_cloud_variance_out", "base::MatrixXd").
-        doc "Jacobian of 3D images features."
+    output_port("point_cloud_uncertainty_out", "base::MatrixXd").
+        doc "One-Sigma uncertainty variance for the 3D features."
 
     #******************************
     #******* Debug Ports **********
