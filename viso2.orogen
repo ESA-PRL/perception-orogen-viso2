@@ -41,19 +41,9 @@ task_context "StereoOdometer" do
             'for a full parameter list have a look at viso2Types.hpp'+
             'and at viso_stereo.h of the viso2 library.'
 
-    property("output_format", "/base/samples/frame/frame_mode_t", :MODE_UNDEFINED).
-       doc "The camera_format is converted into this format before it is written to the output port "
-           "Set it to MODE_UNDEFINED if you want to disable the conversion and the camera_format shall be used."
-
     property("resize_algorithm","/frame_helper/ResizeAlgorithm",:INTER_LINEAR).
         doc "resize algorithm which is used to scale the frame before it is written to the output port. "
             "allowed values are INTER_LINEAR, INTER_NEAREST, INTER_AREA, INTER_CUBIC, INTER_LANCZOS4, BAYER_RESIZE."
-
-    property("scale_x", "double", 1).
-       doc "scale factor for the x direction which is used to scale the image before it is written to the output_port. "
-
-    property("scale_y", "double" , 1).
-       doc "scale factor for the y direction which is used to scale the image before it is written to the output_port. "
 
     #******************************
     #******* Input ports  *********
@@ -109,9 +99,6 @@ task_context "StereoOdometer" do
 
     output_port("intra_frame_samples_out",  ro_ptr('base::samples::frame::Frame')).
         doc 'Intra (Left - Right) frame correspondences image.'
-
-    output_port("left_frame_samples_out",  ro_ptr('base::samples::frame::FramePair')).
-        doc 'Undistorted Image pair.'
 
     port_driven
 end

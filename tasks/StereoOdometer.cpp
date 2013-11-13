@@ -39,12 +39,12 @@ void StereoOdometer::left_frameCallback(const base::Time &ts, const ::RTT::extra
     /** The image need to be in gray scale and undistorted **/
     imagePair[0].first.frame_mode = base::samples::frame::MODE_GRAYSCALE;
     imagePair[0].first.setDataDepth(left_frame_sample->getDataDepth());
-    frameHelperLeft.convert (*left_frame_sample, imagePair[0].first, 0, 0, frame_helper::INTER_LINEAR, true);
+    frameHelperLeft.convert (*left_frame_sample, imagePair[0].first, 0, 0, _resize_algorithm.value(), true);
 
     /** Left color image **/
     leftColorImage.frame_mode = base::samples::frame::MODE_RGB;
     leftColorImage.setDataDepth(left_frame_sample->getDataDepth());
-    frameHelperLeft.convert (*left_frame_sample, leftColorImage, 0, 0, frame_helper::INTER_LINEAR, true);
+    frameHelperLeft.convert (*left_frame_sample, leftColorImage, 0, 0, _resize_algorithm.value(), true);
 
     /** Check the time difference between inertial sensors and joint samples **/
     base::Time diffTime = imagePair[0].first.time - imagePair[0].second.time;
@@ -78,7 +78,7 @@ void StereoOdometer::right_frameCallback(const base::Time &ts, const ::RTT::extr
     /** Correct distortion in image right **/
     imagePair[0].second.frame_mode = base::samples::frame::MODE_GRAYSCALE;
     imagePair[0].second.setDataDepth(right_frame_sample->getDataDepth());
-    frameHelperRight.convert (*right_frame_sample, imagePair[0].second, 0, 0, frame_helper::INTER_LINEAR, true);
+    frameHelperRight.convert (*right_frame_sample, imagePair[0].second, 0, 0, _resize_algorithm.value(), true);
 
     /** Check the time difference between inertial sensors and joint samples **/
     base::Time diffTime = imagePair[0].second.time - imagePair[0].first.time;
@@ -118,7 +118,7 @@ bool StereoOdometer::configureHook()
     viso2param.bucket = _viso2_parameters.value().bucket;
 
     /** Set the calibration parameters in the viso2 type **/
-    viso2param.base = cameracalib.extrinsic.tx/1000.00; //baseline in viso2 is in meters and comes in mm
+    viso2param.base = cameracalib.extrinsic.tx; //baseline in meters
     viso2param.calib.f = 0.5*(cameracalib.camLeft.fx + cameracalib.camRight.fx);
     viso2param.calib.cu = 0.5*(cameracalib.camLeft.cx + cameracalib.camRight.cx);
     viso2param.calib.cv = 0.5*(cameracalib.camLeft.cy + cameracalib.camRight.cy);

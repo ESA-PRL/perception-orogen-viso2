@@ -58,9 +58,9 @@ calib_parameters:
     width: 1360
     height: 1024
   extrinsic:
-    tx: -172.23694
-    ty: 2.35985
-    tz: -2.44105
+    tx: 0.17223694
+    ty: -0.00235985
+    tz: 0.00244105
     rx: 0.02316
     ry: 0.00714
     rz: -0.00807
@@ -106,13 +106,64 @@ calib_parameters:
         - 0.08236
     width: 1024
     height: 768
-#Distnace between left and right camera
+#Distance between left and right camera
   extrinsic:
-    tx: 120.42814 #baseline in x (mm)
-    ty: 0.63857 #baseline in y (mm)
-    tz: 0.3051 #baseline in z (mm)
+    tx: 0.12042814 #baseline in x (meters)
+    ty: 0.00063857 #baseline in y (meters)
+    tz: 0.0003051 #baseline in z (meters)
     rx: 0.00125 #rotation along x (rad)
     ry: -0.00333 #rotation along y (rad)
     rz: 0.00542 #rotation along z (rad)
+--- name:asguard
+# maximum latency, in seconds, of the stream aligner. The aligner will start
+# dropping samples if the difference between the last output and last input is
+# greater than this
+aggregator_max_latency: 1.0
+# minimum time, in s, between two sequential samples arrive on left_frame
+left_frame_period: 0.5
+# minimum time, in s, between two sequential samples arrive on right_frame
+right_frame_period: 0.5
+
+# Calibration parameter for the frame_helper
+calib_parameters:
+  camLeft:
+    fx: 282.100145833342594
+    fy: 282.716777458948854
+    cx: 326.808320656760486
+    cy: 230.264527344742618
+    d0: -0.005569186215114
+    d1: 0.004253364237309
+    d2: 0.000389244345329
+    d3: 0.002065031131976
+    pixel_error:
+        data:
+        - 0.17774
+        - 0.36124
+    width: 640
+    height: 480
+  camRight:
+    fx: 281.726366679745354
+    fy: 281.753144046971215
+    cx: 320.581416054874808
+    cy: 235.019926757638842
+    d0: 0.002441395510367
+    d1: -0.000540347387177
+    d2: -0.000178906010407
+    d3: -0.000498049965097
+    pixel_error:
+        data:
+        - 0.20200
+        - 0.22312
+    width: 640
+    height: 480
+#Distance between left and right camera
+  extrinsic:
+    tx: 0.25038708 #baseline in x (meters)
+    ty: 0.00127105  #baseline in y (meters)
+    tz: 0.00395921 #baseline in z (meters)
+    rx: -0.01024 #rotation along x (rad)
+    ry: 0.04823 #rotation along y (rad)
+    rz: -0.00230 #rotation along z (rad)
+
 
 
