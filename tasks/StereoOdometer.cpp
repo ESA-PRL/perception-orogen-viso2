@@ -2,7 +2,7 @@
 
 #include "StereoOdometer.hpp"
 
-//#define DEBUG_PRINTS 1
+#define DEBUG_PRINTS 1
 
 #ifndef D2R
 #define D2R M_PI/180.00 /** Convert degree to radian **/
@@ -37,13 +37,11 @@ void StereoOdometer::left_frameCallback(const base::Time &ts, const ::RTT::extra
     #endif
 
     /** The image need to be in gray scale and undistorted **/
-    imagePair[0].first.frame_mode = base::samples::frame::MODE_GRAYSCALE;
-    imagePair[0].first.setDataDepth(left_frame_sample->getDataDepth());
+    imagePair[0].first.init(left_frame_sample->size.width, left_frame_sample->size.height, left_frame_sample->getDataDepth(), base::samples::frame::MODE_GRAYSCALE);
     frameHelperLeft.convert (*left_frame_sample, imagePair[0].first, 0, 0, _resize_algorithm.value(), true);
 
     /** Left color image **/
-    leftColorImage.frame_mode = base::samples::frame::MODE_RGB;
-    leftColorImage.setDataDepth(left_frame_sample->getDataDepth());
+    leftColorImage.init(left_frame_sample->size.width, left_frame_sample->size.height, left_frame_sample->getDataDepth(), base::samples::frame::MODE_RGB);
     frameHelperLeft.convert (*left_frame_sample, leftColorImage, 0, 0, _resize_algorithm.value(), true);
 
     /** Check the time difference between inertial sensors and joint samples **/
@@ -76,8 +74,7 @@ void StereoOdometer::right_frameCallback(const base::Time &ts, const ::RTT::extr
     #endif
 
     /** Correct distortion in image right **/
-    imagePair[0].second.frame_mode = base::samples::frame::MODE_GRAYSCALE;
-    imagePair[0].second.setDataDepth(right_frame_sample->getDataDepth());
+    imagePair[0].second.init(right_frame_sample->size.width, right_frame_sample->size.height, right_frame_sample->getDataDepth(), base::samples::frame::MODE_GRAYSCALE);
     frameHelperRight.convert (*right_frame_sample, imagePair[0].second, 0, 0, _resize_algorithm.value(), true);
 
     /** Check the time difference between inertial sensors and joint samples **/

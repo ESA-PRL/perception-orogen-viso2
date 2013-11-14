@@ -161,9 +161,9 @@ calib_parameters:
     tx: 0.25038708 #baseline in x (meters)
     ty: 0.00127105  #baseline in y (meters)
     tz: 0.00395921 #baseline in z (meters)
-    rx: -0.01024 #rotation along x (rad)
-    ry: 0.04823 #rotation along y (rad)
-    rz: -0.00230 #rotation along z (rad)
+    rx: 0.01024 #rotation along x (rad)
+    ry: -0.04823 #rotation along y (rad)
+    rz: 0.00230 #rotation along z (rad)
 
 
 
