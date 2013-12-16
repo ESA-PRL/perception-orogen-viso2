@@ -39,7 +39,7 @@ namespace viso2 {
         int32_t p_Idx; /* Previous left frame idx **/
         base::Vector3d point;
         base::Vector4d color;
-        base::Matrix3d variance;
+        base::Matrix3d cov;
         base::Matrix3d jacobian;
     };
 

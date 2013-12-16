@@ -39,22 +39,22 @@ initPose = Types::Base::Samples::RigidBodyState.new
 Orocos.run 'viso2::StereoOdometer' => 'visual_odometry' do
 
     # log all the output ports
-    #Orocos.log_all_ports
+    Orocos.log_all_ports
     Orocos.conf.load_dir('../config/')
 
     # get the task
     visual_odometry = Orocos.name_service.get 'visual_odometry'
-    Orocos.conf.apply(visual_odometry, ['default', 'asguard'], :override => true )
+    Orocos.conf.apply(visual_odometry, ['default', 'bumblebee'], :override => true )
 
     # connect the tasks to the logs
     log_replay = Orocos::Log::Replay.open( ARGV[0] )
     log_replay.use_sample_time = true
 
     #mapping the logs into the input ports (in the logs of 20130702 the right and left camera are changed!!!!)
-    log_replay.camera_left.frame.connect_to(visual_odometry.left_frame, :type => :buffer, :size => 100 )
-    #log_replay.stereo_camera_firewire.frame_right.connect_to(visual_odometry.left_frame, :type => :buffer, :size => 100 )
-    log_replay.camera_right.frame.connect_to(visual_odometry.right_frame, :type => :buffer, :size => 100 )
-    #log_replay.stereo_camera_firewire.frame_left.connect_to(visual_odometry.right_frame, :type => :buffer, :size => 100 )
+    #log_replay.camera_left.frame.connect_to(visual_odometry.left_frame, :type => :buffer, :size => 100 )
+    log_replay.stereo_camera_firewire.frame_right.connect_to(visual_odometry.left_frame, :type => :buffer, :size => 100 )
+    #log_replay.camera_right.frame.connect_to(visual_odometry.right_frame, :type => :buffer, :size => 100 )
+    log_replay.stereo_camera_firewire.frame_left.connect_to(visual_odometry.right_frame, :type => :buffer, :size => 100 )
 
     visual_odometry.configure
     visual_odometry.start

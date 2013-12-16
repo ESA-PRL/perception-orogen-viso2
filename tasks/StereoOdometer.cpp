@@ -2,7 +2,7 @@
 
 #include "StereoOdometer.hpp"
 
-#define DEBUG_PRINTS 1
+//#define DEBUG_PRINTS 1
 
 #ifndef D2R
 #define D2R M_PI/180.00 /** Convert degree to radian **/
@@ -134,11 +134,17 @@ bool StereoOdometer::configureHook()
     #endif
 
     /** Image plane uncertainty(variance) in pixel **/
-    pxleftVar << pow(cameracalib.camLeft.pixel_error[0],2), 0.00,
-              0.00, pow(cameracalib.camLeft.pixel_error[1]+viso2param.match.match_disp_tolerance, 2);
+    //pxleftVar << pow(cameracalib.camLeft.pixel_error[0],2), 0.00,
+    //          0.00, pow(cameracalib.camLeft.pixel_error[1]+viso2param.match.match_disp_tolerance, 2);
 
-    pxrightVar << pow(cameracalib.camRight.pixel_error[0],2), 0.00,
-              0.00, pow(cameracalib.camRight.pixel_error[1]+viso2param.match.match_disp_tolerance, 2);
+    //pxrightVar << pow(cameracalib.camRight.pixel_error[0],2), 0.00,
+    //          0.00, pow(cameracalib.camRight.pixel_error[1]+viso2param.match.match_disp_tolerance, 2);
+
+    pxleftVar << cameracalib.camLeft.pixel_error[0], 0.00,
+              0.00, cameracalib.camLeft.pixel_error[1];
+
+    pxrightVar << cameracalib.camRight.pixel_error[0], 0.00,
+              0.00, cameracalib.camRight.pixel_error[1];
 
     #ifdef DEBUG_PRINTS
     std::cout<< "[VISO2 CONFIGURATION] Left Frame Error matrix:\n "<<pxleftVar<<"\n";
@@ -388,7 +394,7 @@ void StereoOdometer::createPointCloud(const base::samples::frame::Frame &image1,
                         const Eigen::Affine3d &deltaPose,
                         boost::unordered_map< int32_t, int32_t > &hashIdx,
                         boost::circular_buffer< std::map < int32_t, HashPoint, std::less<int32_t>,
-                                    Eigen::aligned_allocator< std::pair < const int32_t, HashPoint > > > > &hashPointcloud)
+                        Eigen::aligned_allocator< std::pair < const int32_t, HashPoint > > > > &hashPointcloud)
 {
 
     boost::unordered_map< int32_t, int32_t > localHashIdx;
@@ -402,8 +408,8 @@ void StereoOdometer::createPointCloud(const base::samples::frame::Frame &image1,
     pxVar << pxleftVar, Eigen::Matrix2d::Zero(),
         Eigen::Matrix2d::Zero(), pxrightVar;
 
-    /** Create the hast table with the point cloud **/
-    for (register size_t i = 0; i <inlier_indices .size(); ++i)
+    /** Create the hash table with the point cloud **/
+    for (register size_t i = 0; i <inlier_indices.size(); ++i)
     {
         const Matcher::p_match& match = matches[inlier_indices[i]];
         HashPoint hashPoint;
@@ -414,8 +420,9 @@ void StereoOdometer::createPointCloud(const base::samples::frame::Frame &image1,
         #endif
 
         /** 3D Point **/
+        //std::cout<<"image_point["<<i<<"] "<<match.u1c <<" "<<match.v1c<<"\n";
         base::Vector3d point (match.u1c + Q(0,3),  match.v1c + Q(1,3), Q(2,3));
-       // std::cout<<"point["<<i<<"] "<<point[0] <<" "<<point[1]<<" "<<point[2]<<"\n";
+        //std::cout<<"point["<<i<<"] "<<point[0] <<" "<<point[1]<<" "<<point[2]<<"\n";
         double disparity = match.u1c - match.u2c;
         double W  = Q(3,2)*disparity + Q(3,3);
         point = point * (1.0/W);
@@ -423,7 +430,7 @@ void StereoOdometer::createPointCloud(const base::samples::frame::Frame &image1,
         hashPoint.point = point;
 
         /** Color **/
-        cv::Vec3f color = cv_image1.at<cv::Vec3b>(match.v1c, match.u1c);
+        cv::Vec3b color = cv_image1.at<cv::Vec3b>(match.v1c, match.u1c);
         base::Vector4d color4d;
         color4d[0] = color[0]/255.0;//R
         color4d[1] = color[1]/255.0;//G
@@ -435,14 +442,14 @@ void StereoOdometer::createPointCloud(const base::samples::frame::Frame &image1,
         Eigen::Matrix<double, 3, 4> noiseJacobian; /** Jacobian Matrix for the triangulation noise model */
         double disparityPower = pow(disparity,2);
 
-        noiseJacobian <<  -(viso2param.base*match.u2c)/disparityPower, 0, (viso2param.base*match.u1c)/disparityPower, 0.00,
-                -(viso2param.base*match.v1c)/disparityPower, viso2param.base/disparity, (viso2param.base*match.v1c)/disparityPower, 0,
-                -(viso2param.base*viso2param.calib.f)/disparityPower, 0,  (viso2param.base*viso2param.calib.f )/disparityPower, 0;
+        noiseJacobian <<  -(viso2param.base*match.u2c)/disparityPower, 0.00, (viso2param.base*match.u1c)/disparityPower, 0.00,
+                -(viso2param.base*match.v1c)/disparityPower, viso2param.base/disparity, (viso2param.base*match.v1c)/disparityPower, 0.00,
+                -(viso2param.base*viso2param.calib.f)/disparityPower, 0.00,  (viso2param.base*viso2param.calib.f)/disparityPower, 0.00;
 
-        hashPoint.variance = noiseJacobian * pxVar * noiseJacobian.transpose();
+        hashPoint.cov = noiseJacobian * pxVar * noiseJacobian.transpose();
 
         #ifdef DEBUG_PRINTS
-        std::cout<<"Point var:\n"<<hashPoint.variance <<"\n";
+        std::cout<<"Point var:\n"<<hashPoint.cov <<"\n";
         #endif
 
         /** Compute Jacobian **/
@@ -592,7 +599,7 @@ void StereoOdometer::postProcessPointCloud (boost::unordered_map< int32_t, int32
         #endif
 
         /** The uncertainty of the current points **/
-        pointsVar.block<3, 3>(0,3*index) = point.variance;
+        pointsVar.block<3, 3>(0,3*index) = point.cov;
 
         /** Look in the previous point cloud **/
         if (hashPointcloud[1].find(prevIdx) != hashPointcloud[1].end())
