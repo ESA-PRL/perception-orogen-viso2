@@ -140,11 +140,8 @@ bool StereoOdometer::configureHook()
     //pxrightVar << pow(cameracalib.camRight.pixel_error[0],2), 0.00,
     //          0.00, pow(cameracalib.camRight.pixel_error[1]+viso2param.match.match_disp_tolerance, 2);
 
-    pxleftVar << cameracalib.camLeft.pixel_error[0], 0.00,
-              0.00, cameracalib.camLeft.pixel_error[1];
-
-    pxrightVar << cameracalib.camRight.pixel_error[0], 0.00,
-              0.00, cameracalib.camRight.pixel_error[1];
+    pxleftVar = cameracalib.camLeft.getPixelCovariance();
+    pxleftVar = cameracalib.camRight.getPixelCovariance();
 
     #ifdef DEBUG_PRINTS
     std::cout<< "[VISO2 CONFIGURATION] Left Frame Error matrix:\n "<<pxleftVar<<"\n";
