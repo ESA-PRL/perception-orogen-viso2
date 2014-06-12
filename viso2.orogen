@@ -45,6 +45,10 @@ task_context "StereoOdometer" do
         doc "resize algorithm which is used to scale the frame before it is written to the output port. "
             "allowed values are INTER_LINEAR, INTER_NEAREST, INTER_AREA, INTER_CUBIC, INTER_LANCZOS4, BAYER_RESIZE."
 
+    property('camera_source_frame', '/std/string').doc 'From Frame at previous instance time for the transformer'
+    property('camera_target_frame', '/std/string').doc 'To Frame at next instance time for the transformer'
+
+
     #******************************
     #******* Input ports  *********
     #******************************

@@ -2,7 +2,7 @@
 
 #include "StereoOdometer.hpp"
 
-//#define DEBUG_PRINTS 1
+#define DEBUG_PRINTS 1
 
 #ifndef D2R
 #define D2R M_PI/180.00 /** Convert degree to radian **/
@@ -141,7 +141,7 @@ bool StereoOdometer::configureHook()
     //          0.00, pow(cameracalib.camRight.pixel_error[1]+viso2param.match.match_disp_tolerance, 2);
 
     pxleftVar = cameracalib.camLeft.getPixelCovariance();
-    pxleftVar = cameracalib.camRight.getPixelCovariance();
+    pxrightVar = cameracalib.camRight.getPixelCovariance();
 
     #ifdef DEBUG_PRINTS
     std::cout<< "[VISO2 CONFIGURATION] Left Frame Error matrix:\n "<<pxleftVar<<"\n";
@@ -160,8 +160,8 @@ bool StereoOdometer::configureHook()
 
     /** Rigid body state output initialization **/
     poseOut.invalidate();
-    poseOut.sourceFrame = "CameraFrame_T";
-    poseOut.targetFrame = "CameraFrame_0";
+    poseOut.sourceFrame = _camera_source_frame.value();
+    poseOut.targetFrame = _camera_target_frame.value();
     poseOut.orientation = Eigen::Quaterniond(Eigen::Matrix3d::Identity());
     poseOut.position = Eigen::Vector3d::Zero();
     poseOut.velocity = Eigen::Vector3d::Zero();
@@ -271,6 +271,52 @@ void StereoOdometer::computeStereoOdometer()
         deltaPoseOut.orientation = deltaAttitude;
         deltaPoseOut.position = deltaPose.translation();
 
+        /** Port out the delta pose **/
+        _delta_pose_samples_out.write(deltaPoseOut);
+
+        /** Port out the accumulated pose **/
+        _pose_samples_out.write(poseOut);
+
+         if (_output_debug.value())
+        {
+            /** Draw matches in the images using the FrameHelper which internally uses openCV **/
+            ::base::samples::frame::Frame *frame_ptr = intraFrame_out.write_access();
+            this->drawMatches (imagePair[0].first, imagePair[0].second, viso->getMatches(), viso->getInlierIndices(), *frame_ptr);
+
+            frame_ptr->time = imagePair[0].time;
+            intraFrame_out.reset(frame_ptr);
+            #ifdef DEBUG_PRINTS
+            std::cout<<"frame_ptr: "<<frame_ptr<<"\n";
+            std::cout<<"frame size: "<<frame_ptr->size.width*frame_ptr->size.height<<"\n";
+            #endif
+            _intra_frame_samples_out.write(intraFrame_out);
+
+        }
+
+        /** Create the point cloud from the current pair **/
+        this->createPointCloud(leftColorImage, viso->getMatches(),
+                            viso->getInlierIndices(), Q, deltaPose, hashIdx, hashPointcloud);
+
+        /** Re-arrange the point cloud and compute the uncertainty **/
+        base::samples::Pointcloud pointcloud;
+        base::MatrixXd pointsVar, deltaJacobCurr, deltaJacobPrev;
+        this->postProcessPointCloud (hashIdx, hashPointcloud, pointcloud, pointsVar, deltaJacobCurr, deltaJacobPrev);
+
+        /** Port out the information **/
+        pointcloud.time = imagePair[0].time;
+        _point_cloud_samples_out.write(pointcloud);
+        _point_cloud_uncertainty_out.write(pointsVar);
+        _delta_pose_jacobians_current_out.write(deltaJacobCurr);
+        _delta_pose_jacobians_previous_out.write(deltaJacobPrev);
+
+
+        #ifdef DEBUG_PRINTS
+        std::cout<<"Jacobian Current is "<<deltaJacobCurr.rows()<<" x "<<deltaJacobCurr.cols()<<"\n";
+        std::cout<<"Jacobian Previous is "<<deltaJacobPrev.rows()<<" x "<<deltaJacobPrev.cols()<<"\n";
+        std::cout<<"Uncertainty is "<<pointsVar.rows()<<" x "<<pointsVar.cols()<<"\n";
+        #endif
+
+
     }
     else
     {
@@ -278,54 +324,10 @@ void StereoOdometer::computeStereoOdometer()
         deltaPoseOut.time = imagePair[0].time;
     }
 
-    /** Port out the delta pose **/
-    _delta_pose_samples_out.write(deltaPoseOut);
-
-    /** Port out the accumulated pose **/
-    _pose_samples_out.write(poseOut);
-
-    if (_output_debug.value())
-    {
-        /** Draw matches in the images using the FrameHelper which internally uses openCV **/
-        ::base::samples::frame::Frame *frame_ptr = intraFrame_out.write_access();
-        this->drawMatches (imagePair[0].first, imagePair[0].second, viso->getMatches(), viso->getInlierIndices(), *frame_ptr);
-
-        frame_ptr->time = imagePair[0].time;
-        intraFrame_out.reset(frame_ptr);
-        #ifdef DEBUG_PRINTS
-        std::cout<<"frame_ptr: "<<frame_ptr<<"\n";
-        std::cout<<"frame size: "<<frame_ptr->size.width*frame_ptr->size.height<<"\n";
-        #endif
-        _intra_frame_samples_out.write(intraFrame_out);
-
-    }
-
-
-    /** Create the point cloud from the current pair **/
-    this->createPointCloud(leftColorImage, viso->getMatches(),
-                        viso->getInlierIndices(), Q, deltaPose, hashIdx, hashPointcloud);
-
-    /** Re-arrange the point cloud and compute the uncertainty **/
-    base::samples::Pointcloud pointcloud;
-    base::MatrixXd pointsVar, deltaJacobCurr, deltaJacobPrev;
-    this->postProcessPointCloud (hashIdx, hashPointcloud, pointcloud, pointsVar, deltaJacobCurr, deltaJacobPrev);
-
-    /** Port out the information **/
-    pointcloud.time = imagePair[0].time;
-    _point_cloud_samples_out.write(pointcloud);
-    _point_cloud_uncertainty_out.write(pointsVar);
-    _delta_pose_jacobians_current_out.write(deltaJacobCurr);
-    _delta_pose_jacobians_previous_out.write(deltaJacobPrev);
-
-
-    #ifdef DEBUG_PRINTS
-    std::cout<<"Jacobian Current is "<<deltaJacobCurr.rows()<<" x "<<deltaJacobCurr.cols()<<"\n";
-    std::cout<<"Jacobian Previous is "<<deltaJacobPrev.rows()<<" x "<<deltaJacobPrev.cols()<<"\n";
-    std::cout<<"Uncertainty is "<<pointsVar.rows()<<" x "<<pointsVar.cols()<<"\n";
-    #endif
 
     return;
 }
+
 void StereoOdometer::drawMatches(const base::samples::frame::Frame &image1,
                                     const base::samples::frame::Frame &image2,
                                     const std::vector<Matcher::p_match> &matches,
