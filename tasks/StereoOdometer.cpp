@@ -32,8 +32,8 @@ void StereoOdometer::left_frameCallback(const base::Time &ts, const ::RTT::extra
     imagePair[0].first.time = left_frame_sample->time; //time of the left image
 
     #ifdef DEBUG_PRINTS
-    RTT::log(RTT::Warning) << "[VISO2 LEFT_FRAME] Frame arrived at: " <<left_frame_sample->time.toMicroseconds()<< RTT::endlog();
-    //std::cout << "[VISO2 LEFT_FRAME] Frame arrived at: " <<left_frame_sample->time.toMicroseconds()<< std::endl;
+    //RTT::log(RTT::Warning) << "[VISO2 LEFT_FRAME] Frame arrived at: " <<left_frame_sample->time.toMicroseconds()<< RTT::endlog();
+    std::cout << "[VISO2 LEFT_FRAME] Frame arrived at: " <<left_frame_sample->time.toMicroseconds()<< std::endl;
     #endif
 
     /** The image need to be in gray scale and undistorted **/
@@ -69,8 +69,8 @@ void StereoOdometer::right_frameCallback(const base::Time &ts, const ::RTT::extr
     imagePair[0].second.time = right_frame_sample->time; //time stamp for the right image
 
     #ifdef DEBUG_PRINTS
-    RTT::log(RTT::Warning) << "[VISO2 RIGHT_FRAME] Frame arrived at: " <<right_frame_sample->time.toMicroseconds()<< RTT::endlog();
-    //std::cout<< "[VISO2 RIGHT_FRAME] Frame arrived at: " <<right_frame_sample->time.toMicroseconds()<<std::endl;
+    //RTT::log(RTT::Warning) << "[VISO2 RIGHT_FRAME] Frame arrived at: " <<right_frame_sample->time.toMicroseconds()<< RTT::endlog();
+    std::cout<< "[VISO2 RIGHT_FRAME] Frame arrived at: " <<right_frame_sample->time.toMicroseconds()<<std::endl;
     #endif
 
     /** Correct distortion in image right **/
@@ -464,7 +464,7 @@ void StereoOdometer::createPointCloud(const base::samples::frame::Frame &image1,
     /** Assign the index hash **/
     hashIdx = localHashIdx;
 
-    /** Order the point cloud **/
+    /** Order the point cloud by match indexes **/
     std::map < int32_t, HashPoint, std::less<int32_t>,
         Eigen::aligned_allocator< std::pair < const int32_t, HashPoint > > > orderedPointcloud;
     std::map<int32_t, int32_t> orderedIdx(localHashIdx.begin(), localHashIdx.end());

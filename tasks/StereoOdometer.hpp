@@ -36,11 +36,11 @@ namespace viso2 {
 
     struct HashPoint
     {
-        int32_t p_Idx; /* Previous left frame idx **/
-        base::Vector3d point;
-        base::Vector4d color;
-        base::Matrix3d cov;
-        base::Matrix3d jacobian;
+        int32_t p_Idx; /* Previous left frame idx of this feature point **/
+        base::Vector3d point; /** 3d coordinate **/
+        base::Vector4d color; /** Color info **/
+        base::Matrix3d cov; /** Covariance matrix of the 3d point**/
+        base::Matrix3d jacobian; /** Jacobian component of this feature point **/
     };
 
 
@@ -91,7 +91,7 @@ namespace viso2 {
         ::base::Matrix2d pxleftVar, pxrightVar; /** Error variance of image plane in pixel units **/
         boost::unordered_map< int32_t, int32_t > hashIdx; /** current to previous index **/
         boost::circular_buffer< std::map < int32_t, HashPoint, std::less<int32_t>,
-            Eigen::aligned_allocator< std::pair < const int32_t, HashPoint > > > > hashPointcloud;
+            Eigen::aligned_allocator< std::pair < const int32_t, HashPoint > > > > hashPointcloud; /** Circular buffer of hash Point Cloud **/
 
         /***************************/
         /** Output Port Variables **/
