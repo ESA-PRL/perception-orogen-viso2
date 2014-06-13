@@ -40,7 +40,7 @@ namespace viso2 {
         base::Vector3d point; /** 3d coordinate **/
         base::Vector4d color; /** Color info **/
         base::Matrix3d cov; /** Covariance matrix of the 3d point**/
-        base::Matrix3d jacobian; /** Jacobian component of this feature point **/
+        base::Vector3d jacobian; /** Jacobian component of this feature point **/
     };
 
 
@@ -201,8 +201,8 @@ namespace viso2 {
                         boost::circular_buffer< std::map < int32_t, HashPoint, std::less<int32_t>,
                                     Eigen::aligned_allocator< std::pair < const int32_t, HashPoint > > > > &hashPointcloud);
 
-        base::Matrix3d computeFeaturesJacobian (const Eigen::Affine3d &deltaPose,
-                                            const Matcher::p_match &match);
+        base::Vector3d computeFeaturesJacobian (const Eigen::Affine3d &deltaPose,
+                                            const base::Vector3d &point);
 
         void postProcessPointCloud (boost::unordered_map< int32_t, int32_t > & hashIdx,
                                     boost::circular_buffer< std::map < int32_t, HashPoint, std::less<int32_t>,

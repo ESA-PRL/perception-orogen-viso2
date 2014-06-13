@@ -452,7 +452,7 @@ void StereoOdometer::createPointCloud(const base::samples::frame::Frame &image1,
         #endif
 
         /** Compute Jacobian **/
-        hashPoint.jacobian = computeFeaturesJacobian (deltaPose, match);
+        hashPoint.jacobian = computeFeaturesJacobian (deltaPose, point);
 
         /** Add key to the hash Point cloud **/
         localHashPointcloud.insert(std::make_pair(match.i1c, hashPoint));
@@ -526,32 +526,18 @@ Eigen::Matrix<double,3,3> drx_by_dr( const Eigen::Quaterniond& q, const Eigen::V
 }
 
 
-base::Matrix3d StereoOdometer::computeFeaturesJacobian (const Eigen::Affine3d &deltaPose, const Matcher::p_match &match)
+base::Vector3d StereoOdometer::computeFeaturesJacobian (const Eigen::Affine3d &deltaPose, const base::Vector3d &point)
 {
-    base::Matrix3d J;
-
-    /** Get the delta 6D vector **/
-    Eigen::Quaternion<double> q(deltaPose.rotation());
-
-    #ifdef DEBUG_PRINTS
-    Eigen::Vector3d trans = deltaPose.translation();
-    Eigen::Vector3d euler;
-    euler[2] = q.toRotationMatrix().eulerAngles(2,1,0)[0];//YAW
-    euler[1] = q.toRotationMatrix().eulerAngles(2,1,0)[1];//PITCH
-    euler[0] = q.toRotationMatrix().eulerAngles(2,1,0)[2];//ROLL
-    std::cout<< "tx: "<<trans[0]<<" ty: "<<trans[1]<<" tz: "<<trans[2]<<"\n";
-    std::cout<< "rx: "<<euler[0]<<" ry: "<<euler[1]<<" rz: "<<euler[2]<<"\n";
-    #endif
-
-    /** Compute derivative matrix **/
-//    Eigen::Matrix<double, 6, 3> deltaF;
-//    deltaF << Eigen::Matrix3d::Identity(), drx_by_dr(q, deltaPose.translation());
+    base::Vector3d Jcolumn;
 
     /** Experimental **/
-    J = deltaPose.rotation();
+    Jcolumn = deltaPose * point;
 
+    #ifdef DEBUG_PRINTS
+    std::cout<< "J column dx: "<<Jcolumn[0]<<" dy: "<<Jcolumn[1]<<" dz: "<<Jcolumn[2]<<"\n";
+    #endif
 
-    return J;
+    return Jcolumn;
 }
 
 void StereoOdometer::postProcessPointCloud (boost::unordered_map< int32_t, int32_t > & hashIdx,
@@ -579,8 +565,8 @@ void StereoOdometer::postProcessPointCloud (boost::unordered_map< int32_t, int32
     pointcloud.points.resize(hashPointcloud[0].size());
     pointcloud.colors.resize(hashPointcloud[0].size());
     pointsVar.resize(3, 3*hashPointcloud[0].size());
-    deltaJacobCurr.resize(3, 3*hashPointcloud[0].size());
-    deltaJacobPrev.resize(3, 3*hashPointcloud[1].size());
+    deltaJacobCurr.resize(3, hashPointcloud[0].size());
+    deltaJacobPrev.resize(3, hashPointcloud[1].size());
 
     register size_t index = 0;
     register size_t indexPrev = 0;
@@ -609,8 +595,8 @@ void StereoOdometer::postProcessPointCloud (boost::unordered_map< int32_t, int32
             #endif
 
             /** Get the Jacobian **/
-            deltaJacobCurr.block<3,3>(0,3*index) = point.jacobian;
-            deltaJacobPrev.block<3,3>(0,3*indexPrev) = point.jacobian.inverse();
+            deltaJacobCurr.col(index) = point.jacobian;
+            deltaJacobPrev.col(indexPrev) = point.jacobian;
 
             indexPrev++;
         }
@@ -621,12 +607,11 @@ void StereoOdometer::postProcessPointCloud (boost::unordered_map< int32_t, int32
             #endif
 
             /** Set the Jacobian **/
-            deltaJacobCurr.block<3,3>(0,3*index).setZero();
+            deltaJacobCurr.col(index).setZero();
 
         }
         index++;
     }
-
 
     return;
 }
