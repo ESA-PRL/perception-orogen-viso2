@@ -562,11 +562,19 @@ void StereoOdometer::postProcessPointCloud (boost::unordered_map< int32_t, int32
         return;
     }
 
-    pointcloud.points.resize(hashPointcloud[0].size());
-    pointcloud.colors.resize(hashPointcloud[0].size());
-    pointsVar.resize(3, 3*hashPointcloud[0].size());
-    deltaJacobCurr.resize(3, hashPointcloud[0].size());
-    deltaJacobPrev.resize(3, hashPointcloud[1].size());
+    try
+    {
+        pointcloud.points.resize(hashPointcloud[0].size());
+        pointcloud.colors.resize(hashPointcloud[0].size());
+        pointsVar.resize(3, 3*hashPointcloud[0].size());
+        deltaJacobCurr.resize(3, hashPointcloud[0].size());
+        deltaJacobPrev.resize(3, hashPointcloud[1].size());
+    }
+    catch (const std::bad_alloc&)
+    {
+        RTT::log(RTT::Warning)<<"[EXCEPTION] Catching bad_alloc exception."<<RTT::endlog();
+        return;
+    }
 
     register size_t index = 0;
     register size_t indexPrev = 0;
