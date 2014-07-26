@@ -2,7 +2,7 @@
 
 #include "StereoOdometer.hpp"
 
-#define DEBUG_PRINTS 1
+//#define DEBUG_PRINTS 1
 
 #ifndef D2R
 #define D2R M_PI/180.00 /** Convert degree to radian **/
@@ -27,14 +27,14 @@ StereoOdometer::~StereoOdometer()
 {
 }
 
-void StereoOdometer::left_frameCallback(const base::Time &ts, const ::RTT::extras::ReadOnlyPointer< ::base::samples::frame::Frame > &left_frame_sample)
+void StereoOdometer::left_frameTransformerCallback(const base::Time &ts, const ::RTT::extras::ReadOnlyPointer< ::base::samples::frame::Frame > &left_frame_sample)
 {
     imagePair[0].first.time = left_frame_sample->time; //time of the left image
 
-    #ifdef DEBUG_PRINTS
+    //#ifdef DEBUG_PRINTS
     //RTT::log(RTT::Warning) << "[VISO2 LEFT_FRAME] Frame arrived at: " <<left_frame_sample->time.toMicroseconds()<< RTT::endlog();
-    std::cout << "[VISO2 LEFT_FRAME] Frame arrived at: " <<left_frame_sample->time.toMicroseconds()<< std::endl;
-    #endif
+    std::cout << "[VISO2 LEFT_FRAME] Frame arrived at: " <<left_frame_sample->time.toString()<< std::endl;
+    //#endif
 
     /** The image need to be in gray scale and undistorted **/
     imagePair[0].first.init(left_frame_sample->size.width, left_frame_sample->size.height, left_frame_sample->getDataDepth(), base::samples::frame::MODE_GRAYSCALE);
@@ -56,22 +56,30 @@ void StereoOdometer::left_frameCallback(const base::Time &ts, const ::RTT::extra
         std::cout<< "[VISO2 LEFT_FRAME] [ON] ("<<diffTime.toMicroseconds()<<")\n";
         #endif
 
-        this->computeStereoOdometer();
+        std::clock_t begin = std::clock();
 
+        viso2::Viso2Info viso2_info = this->computeStereoOdometer(ts);
+
+        std::clock_t end = std::clock();
+        viso2_info.compute_time = ::base::Time::fromSeconds(static_cast<double>(end - begin) / CLOCKS_PER_SEC);
+        #ifdef DEBUG_PRINTS
+        std::cout<<"Visual odometry in :"<< viso2_info.compute_time.toSeconds()<<"[seconds]\n";
+        #endif
+
+        _viso2_info.write(viso2_info);
     }
 
     return;
 }
 
-void StereoOdometer::right_frameCallback(const base::Time &ts, const ::RTT::extras::ReadOnlyPointer< ::base::samples::frame::Frame > &right_frame_sample)
+void StereoOdometer::right_frameTransformerCallback(const base::Time &ts, const ::RTT::extras::ReadOnlyPointer< ::base::samples::frame::Frame > &right_frame_sample)
 {
-
     imagePair[0].second.time = right_frame_sample->time; //time stamp for the right image
 
-    #ifdef DEBUG_PRINTS
+    //#ifdef DEBUG_PRINTS
     //RTT::log(RTT::Warning) << "[VISO2 RIGHT_FRAME] Frame arrived at: " <<right_frame_sample->time.toMicroseconds()<< RTT::endlog();
-    std::cout<< "[VISO2 RIGHT_FRAME] Frame arrived at: " <<right_frame_sample->time.toMicroseconds()<<std::endl;
-    #endif
+    std::cout<< "[VISO2 RIGHT_FRAME] Frame arrived at: " <<right_frame_sample->time.toString()<<std::endl;
+    //#endif
 
     /** Correct distortion in image right **/
     imagePair[0].second.init(right_frame_sample->size.width, right_frame_sample->size.height, right_frame_sample->getDataDepth(), base::samples::frame::MODE_GRAYSCALE);
@@ -88,9 +96,17 @@ void StereoOdometer::right_frameCallback(const base::Time &ts, const ::RTT::extr
         #ifdef DEBUG_PRINTS
         std::cout<< "[VISO2 RIGHT_FRAME] [ON] ("<<diffTime.toMicroseconds()<<")\n";
         #endif
+        std::clock_t begin = std::clock();
 
-        this->computeStereoOdometer();
+        viso2::Viso2Info viso2_info = this->computeStereoOdometer(ts);
 
+        std::clock_t end = std::clock();
+        viso2_info.compute_time = ::base::Time::fromSeconds(static_cast<double>(end - begin) / CLOCKS_PER_SEC);
+        #ifdef DEBUG_PRINTS
+        std::cout<<"Visual odometry in :"<< viso2_info.compute_time.toSeconds()<<"[seconds]\n";
+        #endif
+
+        _viso2_info.write(viso2_info);
     }
 
     return;
@@ -160,8 +176,8 @@ bool StereoOdometer::configureHook()
 
     /** Rigid body state output initialization **/
     poseOut.invalidate();
-    poseOut.sourceFrame = _camera_source_frame.value();
-    poseOut.targetFrame = _camera_target_frame.value();
+    poseOut.sourceFrame = _visual_odometry_source_frame.value();
+    poseOut.targetFrame = _visual_odometry_target_frame.value();
     poseOut.orientation = Eigen::Quaterniond(Eigen::Matrix3d::Identity());
     poseOut.position = Eigen::Vector3d::Zero();
     poseOut.velocity = Eigen::Vector3d::Zero();
@@ -178,6 +194,9 @@ bool StereoOdometer::configureHook()
 
     /** Hash Table of indexes **/
     hashPointcloud.set_capacity(DEFAULT_CIRCULAR_BUFFER_SIZE);
+
+    /** Transformer initial matrix **/
+    tf = Eigen::Affine3d::Identity();
 
     return true;
 }
@@ -205,14 +224,25 @@ void StereoOdometer::cleanupHook()
     StereoOdometerBase::cleanupHook();
 }
 
-void StereoOdometer::computeStereoOdometer()
+viso2::Viso2Info StereoOdometer::computeStereoOdometer(const base::Time &ts)
 {
     uint8_t *l_image_data, *r_image_data;
+    viso2::Viso2Info viso2_info;
+
+    /** Time **/
+    viso2_info.time = ts;
+    viso2_info.num_matches = ::base::NaN<double>();
+
+    /** Get the transformation (transformation) Tbody_left_camera which is body = Tbody_left_camera left_camera **/
+    _left_camera2body.get(ts, tf, false);
 
     /** Delta pose **/
     base::samples::RigidBodyState deltaPoseOut;
     Eigen::Affine3d deltaPose;
     deltaPoseOut.invalidate();
+    deltaPoseOut.sourceFrame = _delta_visual_odometry_source_frame.value();
+    deltaPoseOut.targetFrame = _delta_visual_odometry_target_frame.value();
+
 
     /** Get the images to plain pointers **/
     l_image_data = imagePair[0].first.getImagePtr();
@@ -237,16 +267,21 @@ void StereoOdometer::computeStereoOdometer()
         deltaM = Eigen::Map<const Eigen::Matrix4d> (&(mdata[0]), 4, 4);
         deltaPose.matrix() = deltaM;
 
+        /** Transform the deltaPose in the desired frame **/
+        deltaPose = tf * deltaPose * tf.inverse();
+
         /** On success, update current pose **/
         pose = pose * deltaPose;
 
         /** Output some statistics **/
+        viso2_info.num_matches = viso->getNumberOfMatches();
+        viso2_info.num_inliers = viso->getNumberOfInliers();
+        viso2_info.ratio_inliers = (100.0*viso2_info.num_inliers/viso2_info.num_matches);
+
         #ifdef DEBUG_PRINTS
-        double num_matches = viso->getNumberOfMatches();
-        double num_inliers = viso->getNumberOfInliers();
-        std::cout << ", Matches: " << num_matches;
-        std::cout << ", Inliers: " << num_inliers;
-        std::cout << ", Inliers Ratio: " << 100.0*num_inliers/num_matches << " %" << ", Current pose: " << std::endl;
+        std::cout << ", Matches: " << viso2_info.num_matches;
+        std::cout << ", Inliers: " << viso2_info.num_inliers;
+        std::cout << ", Inliers Ratio: " << viso2_info.ratio_inliers << " %" << ", Current pose: " << std::endl;
         std::cout << pose.matrix() << std::endl << std::endl;
         #endif
 
@@ -302,13 +337,15 @@ void StereoOdometer::computeStereoOdometer()
         base::MatrixXd pointsVar, deltaJacobCurr, deltaJacobPrev;
         this->postProcessPointCloud (hashIdx, hashPointcloud, pointcloud, pointsVar, deltaJacobCurr, deltaJacobPrev);
 
-        /** Port out the information **/
-        pointcloud.time = imagePair[0].time;
-        _point_cloud_samples_out.write(pointcloud);
-        _point_cloud_uncertainty_out.write(pointsVar);
-        _delta_pose_jacobians_current_out.write(deltaJacobCurr);
-        _delta_pose_jacobians_previous_out.write(deltaJacobPrev);
-
+         if (_output_debug.value())
+        {
+            /** Port out the information **/
+            pointcloud.time = imagePair[0].time;
+            _point_cloud_samples_out.write(pointcloud);
+            _point_cloud_uncertainty_out.write(pointsVar);
+            _delta_pose_jacobians_current_out.write(deltaJacobCurr);
+            _delta_pose_jacobians_previous_out.write(deltaJacobPrev);
+        }
 
         #ifdef DEBUG_PRINTS
         std::cout<<"Jacobian Current is "<<deltaJacobCurr.rows()<<" x "<<deltaJacobCurr.cols()<<"\n";
@@ -325,7 +362,7 @@ void StereoOdometer::computeStereoOdometer()
     }
 
 
-    return;
+    return viso2_info;
 }
 
 void StereoOdometer::drawMatches(const base::samples::frame::Frame &image1,
@@ -426,6 +463,11 @@ void StereoOdometer::createPointCloud(const base::samples::frame::Frame &image1,
         double W  = Q(3,2)*disparity + Q(3,3);
         point = point * (1.0/W);
         //std::cout<<"3dpoint["<<i<<"] "<<point[0] <<" "<<point[1]<<" "<<point[2]<<"\n";
+
+        /** Point in the desired frame **/
+        point = tf * point;
+
+        /** Store it in the hash element **/
         hashPoint.point = point;
 
         /** Color **/
@@ -446,6 +488,9 @@ void StereoOdometer::createPointCloud(const base::samples::frame::Frame &image1,
                 -(viso2param.base*viso2param.calib.f)/disparityPower, 0.00,  (viso2param.base*viso2param.calib.f)/disparityPower, 0.00;
 
         hashPoint.cov = noiseJacobian * pxVar * noiseJacobian.transpose();
+
+        /** Covariance in the desired frame **/
+        hashPoint.cov = tf.rotation() * hashPoint.cov;
 
         #ifdef DEBUG_PRINTS
         std::cout<<"Point var:\n"<<hashPoint.cov <<"\n";
@@ -554,7 +599,7 @@ void StereoOdometer::postProcessPointCloud (boost::unordered_map< int32_t, int32
     std::cout<<"hashIdx has size: "<< hashIdx.size()<<"\n";
     #endif
 
-    if (hashIdx.size() == 0)
+    if (hashIdx.size() < 2.0 || hashPointcloud.size() < 2.0)
     {
         #ifdef DEBUG_PRINTS
         std::cout<<"TWO FIRST IMAGES: IT REQUIRED AT LEAST 4 IMAGES\n";

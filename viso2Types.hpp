@@ -8,6 +8,7 @@
  * which case you do not need this file
  */
 
+#include <base/Time.hpp>
 #include <base/Eigen.hpp>
 #include <viso2/matcher.h>
 #include <viso2/viso.h>
@@ -35,6 +36,16 @@ namespace viso2 {
 
         }
     };
+
+    struct Viso2Info
+    {
+        base::Time time;
+        double num_matches;
+        double num_inliers;
+        double ratio_inliers;
+        base::Time compute_time;
+    };
+
 
 }
 

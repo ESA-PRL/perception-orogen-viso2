@@ -15,6 +15,9 @@
 #include "frame_helper/FrameHelperTypes.h" /** Types for FrameHelper **/
 #include "frame_helper/Calibration.h" /** Rock type for camera calibration parameters **/
 
+/** Rock Types **/
+#include <base/samples/RigidBodyState.hpp>
+
 /** Standard **/
 #include <vector>
 #include <map>
@@ -27,6 +30,7 @@
 /** LibViso2 includes **/
 #include <viso2/matrix.h>
 #include <viso2/viso_stereo.h>
+#include <ctime>
 
 /** Eigen **/
 #include<Eigen/StdVector>
@@ -87,6 +91,7 @@ namespace viso2 {
         boost::circular_buffer<base::samples::frame::FramePair> imagePair; /** Left and right images **/
         frame_helper::FrameHelper frameHelperLeft, frameHelperRight; /** Frame helper **/
         Eigen::Matrix4d Q; /** Re-projection matrix **/
+        Eigen::Affine3d tf; /** Transformer transformation **/
         ::base::samples::frame::Frame leftColorImage;/** coloring point clouds (if selected) */
         ::base::Matrix2d pxleftVar, pxrightVar; /** Error variance of image plane in pixel units **/
         boost::unordered_map< int32_t, int32_t > hashIdx; /** current to previous index **/
@@ -102,8 +107,8 @@ namespace viso2 {
 
     protected:
 
-        virtual void left_frameCallback(const base::Time &ts, const ::RTT::extras::ReadOnlyPointer< ::base::samples::frame::Frame > &left_frame_sample);
-        virtual void right_frameCallback(const base::Time &ts, const ::RTT::extras::ReadOnlyPointer< ::base::samples::frame::Frame > &right_frame_sample);
+        virtual void left_frameTransformerCallback(const base::Time &ts, const ::RTT::extras::ReadOnlyPointer< ::base::samples::frame::Frame > &left_frame_sample);
+        virtual void right_frameTransformerCallback(const base::Time &ts, const ::RTT::extras::ReadOnlyPointer< ::base::samples::frame::Frame > &right_frame_sample);
 
     public:
         /** TaskContext constructor for StereoOdometer
@@ -183,7 +188,7 @@ namespace viso2 {
 
         /** @brief Computes one step of stereo visual odometry
          */
-        void computeStereoOdometer();
+        viso2::Viso2Info computeStereoOdometer(const base::Time &ts);
 
         void drawMatches(const base::samples::frame::Frame &image1, const base::samples::frame::Frame &image2,
                         const std::vector<Matcher::p_match> &matches, const std::vector<int32_t>& inlier_indices, base::samples::frame::Frame &imageMatches);

@@ -14,7 +14,7 @@
   <depend package="dummy-dependency-n" />
   -->
   <depend package="base/types" />
-  <depend package="drivers/orogen/aggregator" />
+  <depend package="drivers/orogen/transformer" />
   <depend package="image_processing/viso2" />
   <depend package="image_processing/frame_helper"/>
 

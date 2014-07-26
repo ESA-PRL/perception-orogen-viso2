@@ -45,9 +45,11 @@ task_context "StereoOdometer" do
         doc "resize algorithm which is used to scale the frame before it is written to the output port. "
             "allowed values are INTER_LINEAR, INTER_NEAREST, INTER_AREA, INTER_CUBIC, INTER_LANCZOS4, BAYER_RESIZE."
 
-    property('camera_source_frame', '/std/string').doc 'From Frame at previous instance time for the transformer'
-    property('camera_target_frame', '/std/string').doc 'To Frame at next instance time for the transformer'
+    property('visual_odometry_source_frame', '/std/string').doc 'From Frame at previous instance time for the transformer'
+    property('visual_odometry_target_frame', '/std/string').doc 'To Frame at next instance time for the transformer'
 
+    property('delta_visual_odometry_source_frame', '/std/string').doc 'From Frame at previous instance time for the transformer'
+    property('delta_visual_odometry_target_frame', '/std/string').doc 'To Frame at next instance time for the transformer'
 
     #******************************
     #******* Input ports  *********
@@ -59,13 +61,13 @@ task_context "StereoOdometer" do
         doc 'Right camera frame.'
 
     #******************************
-    #** Aggregator parameters *****
+    #******* Transformer  *********
     #******************************
-    # Aggregator does not support pointers as input ports
-    stream_aligner() do
-	align_port("left_frame", 0.05)
-	align_port("right_frame", 0.05)
-	max_latency(0.1)
+    transformer do
+        transform "left_camera", "body" # left_camera to body in "Source in target" convention
+	align_port("left_frame", 0.5)
+	align_port("right_frame", 0.5)
+	max_latency(1.0)
     end
 
     # An output port, i.e. an object to which the component pushes data so that
@@ -78,10 +80,10 @@ task_context "StereoOdometer" do
     #******* Output Ports *********
     #******************************
     output_port("pose_samples_out", "/base/samples/RigidBodyState").
-        doc "Estimated left camera pose."
+        doc "Estimated pose in body frame."
 
     output_port("delta_pose_samples_out", "/base/samples/RigidBodyState").
-        doc "Delta estimated left camera pose."
+        doc "Delta estimated pose in body frame."
 
     output_port("delta_pose_jacobians_current_out", "base::MatrixXd").
         doc "Jacobian of 3D images features."
@@ -89,11 +91,11 @@ task_context "StereoOdometer" do
     output_port("delta_pose_jacobians_previous_out", "base::MatrixXd").
         doc "Jacobian of 3D images features."
 
-    output_port("point_cloud_samples_out",  'base::samples::Pointcloud').
-        doc 'Point Cloud representation of the 3D features.'
-
     output_port("point_cloud_uncertainty_out", "base::MatrixXd").
         doc "One-Sigma uncertainty variance for the 3D features."
+
+    output_port('viso2_info', 'viso2/Viso2Info').
+	doc 'Visual Odometry extra information port.'
 
     #******************************
     #******* Debug Ports **********
@@ -103,6 +105,9 @@ task_context "StereoOdometer" do
 
     output_port("intra_frame_samples_out",  ro_ptr('base::samples::frame::Frame')).
         doc 'Intra (Left - Right) frame correspondences image.'
+
+    output_port("point_cloud_samples_out",  'base::samples::Pointcloud').
+        doc 'Point Cloud representation of the 3D features.'
 
     port_driven
 end
