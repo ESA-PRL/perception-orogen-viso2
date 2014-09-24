@@ -31,10 +31,10 @@ void StereoOdometer::left_frameTransformerCallback(const base::Time &ts, const :
 {
     imagePair[0].first.time = left_frame_sample->time; //time of the left image
 
-    //#ifdef DEBUG_PRINTS
+    #ifdef DEBUG_PRINTS
     //RTT::log(RTT::Warning) << "[VISO2 LEFT_FRAME] Frame arrived at: " <<left_frame_sample->time.toMicroseconds()<< RTT::endlog();
     std::cout << "[VISO2 LEFT_FRAME] Frame arrived at: " <<left_frame_sample->time.toString()<< std::endl;
-    //#endif
+    #endif
 
     /** The image need to be in gray scale and undistorted **/
     imagePair[0].first.init(left_frame_sample->size.width, left_frame_sample->size.height, left_frame_sample->getDataDepth(), base::samples::frame::MODE_GRAYSCALE);
@@ -76,10 +76,10 @@ void StereoOdometer::right_frameTransformerCallback(const base::Time &ts, const 
 {
     imagePair[0].second.time = right_frame_sample->time; //time stamp for the right image
 
-    //#ifdef DEBUG_PRINTS
+    #ifdef DEBUG_PRINTS
     //RTT::log(RTT::Warning) << "[VISO2 RIGHT_FRAME] Frame arrived at: " <<right_frame_sample->time.toMicroseconds()<< RTT::endlog();
     std::cout<< "[VISO2 RIGHT_FRAME] Frame arrived at: " <<right_frame_sample->time.toString()<<std::endl;
-    //#endif
+    #endif
 
     /** Correct distortion in image right **/
     imagePair[0].second.init(right_frame_sample->size.width, right_frame_sample->size.height, right_frame_sample->getDataDepth(), base::samples::frame::MODE_GRAYSCALE);
@@ -187,10 +187,10 @@ bool StereoOdometer::configureHook()
     imagePair.set_capacity(DEFAULT_CIRCULAR_BUFFER_SIZE);
     imagePair.push_front(pair);
 
-    ::base::samples::frame::Frame *intraFrame = new ::base::samples::frame::Frame();
+    ::base::samples::frame::Frame *outframe = new ::base::samples::frame::Frame();
 
-    intraFrame_out.reset(intraFrame);
-    intraFrame = NULL;
+    frame_out.reset(outframe);
+    outframe = NULL;
 
     /** Hash Table of indexes **/
     hashPointcloud.set_capacity(DEFAULT_CIRCULAR_BUFFER_SIZE);
@@ -315,16 +315,16 @@ viso2::Viso2Info StereoOdometer::computeStereoOdometer(const base::Time &ts)
          if (_output_debug.value())
         {
             /** Draw matches in the images using the FrameHelper which internally uses openCV **/
-            ::base::samples::frame::Frame *frame_ptr = intraFrame_out.write_access();
+            ::base::samples::frame::Frame *frame_ptr = frame_out.write_access();
             this->drawMatches (imagePair[0].first, imagePair[0].second, viso->getMatches(), viso->getInlierIndices(), *frame_ptr);
 
             frame_ptr->time = imagePair[0].time;
-            intraFrame_out.reset(frame_ptr);
+            frame_out.reset(frame_ptr);
             #ifdef DEBUG_PRINTS
             std::cout<<"frame_ptr: "<<frame_ptr<<"\n";
             std::cout<<"frame size: "<<frame_ptr->size.width*frame_ptr->size.height<<"\n";
             #endif
-            _intra_frame_samples_out.write(intraFrame_out);
+            _frame_samples_out.write(frame_out);
 
         }
 
@@ -369,11 +369,11 @@ void StereoOdometer::drawMatches(const base::samples::frame::Frame &image1,
                                     const base::samples::frame::Frame &image2,
                                     const std::vector<Matcher::p_match> &matches,
                                     const std::vector<int32_t>& inlier_indices,
-                                    base::samples::frame::Frame &imageMatches)
+                                    base::samples::frame::Frame &imageOutput)
 {
     ::cv::Mat cvImage1 = frameHelperLeft.convertToCvMat(image1);
     ::cv::Mat cvImage2 = frameHelperRight.convertToCvMat(image2);
-    ::cv::Mat cvImgMatches;
+    ::cv::Mat cvOutImg;
     std::vector< cv::KeyPoint > keypoints1, keypoints2;
     std::vector< cv::DMatch > cvMatches;
     keypoints1.resize(inlier_indices.size());
@@ -398,8 +398,16 @@ void StereoOdometer::drawMatches(const base::samples::frame::Frame &image1,
         cvMatches[i] = cvMatch;
     }
 
-    cv::drawMatches (cvImage1, keypoints1, cvImage2, keypoints2, cvMatches, cvImgMatches);
-    frameHelperLeft.copyMatToFrame(cvImgMatches, imageMatches);
+    if (_image_ouput_type.get() == viso2::INTRA_MATCHES)
+    {
+        cv::drawMatches (cvImage1, keypoints1, cvImage2, keypoints2, cvMatches, cvOutImg);
+    }
+    else if (_image_ouput_type.get() == viso2::INTER_KEYPOINTS)
+    {
+        cv::drawKeypoints (cvImage1, keypoints1, cvOutImg, cv::Scalar(0, 255, 0));
+    }
+
+    frameHelperLeft.copyMatToFrame(cvOutImg, imageOutput);
 
     return;
 }

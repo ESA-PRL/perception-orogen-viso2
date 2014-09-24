@@ -103,7 +103,7 @@ namespace viso2 {
         /***************************/
         Eigen::Affine3d pose; /** Accumulated pose **/
         base::samples::RigidBodyState poseOut; /** Accumulated pose **/
-        RTT::extras::ReadOnlyPointer<base::samples::frame::Frame> intraFrame_out; /** Debug intra frame image **/
+        RTT::extras::ReadOnlyPointer<base::samples::frame::Frame> frame_out; /** Debug intra frame image **/
 
     protected:
 
@@ -191,7 +191,7 @@ namespace viso2 {
         viso2::Viso2Info computeStereoOdometer(const base::Time &ts);
 
         void drawMatches(const base::samples::frame::Frame &image1, const base::samples::frame::Frame &image2,
-                        const std::vector<Matcher::p_match> &matches, const std::vector<int32_t>& inlier_indices, base::samples::frame::Frame &imageMatches);
+                        const std::vector<Matcher::p_match> &matches, const std::vector<int32_t>& inlier_indices, base::samples::frame::Frame &imageOutput);
 
         void createDistanceImage(const base::samples::frame::Frame &image1, const base::samples::frame::Frame &image2,
                         const std::vector<Matcher::p_match> &matches, const VisualOdometryStereo::parameters &viso2param,

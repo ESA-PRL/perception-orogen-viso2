@@ -15,6 +15,9 @@
 
 namespace viso2 {
 
+    /**  Type for image output **/
+    enum IMAGE_OUTPUT_TYPE{INTRA_MATCHES, INTER_KEYPOINTS};
+
     /** Currently oroGen does not support class inheritance in ports/property definitions **/
     /** This is a plain struct of the viso2 parameters which have inheritance **/
     /** Have a look at viso2/viso_stereo.h viso2/viso.h and viso2/matcher.h **/
