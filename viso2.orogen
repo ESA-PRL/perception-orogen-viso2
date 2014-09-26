@@ -80,19 +80,19 @@ task_context "StereoOdometer" do
     #******* Output Ports *********
     #******************************
     output_port("pose_samples_out", "/base/samples/RigidBodyState").
-        doc "Estimated pose in body frame."
+        doc "Estimated pose in body frame. Tbody0_bodyk"
 
     output_port("delta_pose_samples_out", "/base/samples/RigidBodyState").
-        doc "Delta estimated pose in body frame."
+        doc "Delta estimated pose in body frame. Tbodyk-1_bodyk"
 
     output_port("delta_pose_jacobians_current_out", "base::MatrixXd").
-        doc "Jacobian of 3D images features."
+        doc "Jacobian of 3D images features. J^k,k-1_k"
 
     output_port("delta_pose_jacobians_previous_out", "base::MatrixXd").
-        doc "Jacobian of 3D images features."
+        doc "Jacobian of 3D images features. J^k-1,k-1_k"
 
     output_port("point_cloud_uncertainty_out", "base::MatrixXd").
-        doc "One-Sigma uncertainty variance for the 3D features."
+        doc "One-Sigma uncertainty variance for the 3D features. Rk"
 
     output_port('viso2_info', 'viso2/Viso2Info').
 	doc 'Visual Odometry extra information port.'
