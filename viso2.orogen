@@ -91,7 +91,7 @@ task_context "StereoOdometer" do
     output_port("delta_pose_jacobians_k_m_out", "base::MatrixXd").
         doc "Jacobian of current 3D images features. J^k+m_{k,k+m}"
 
-    output_port("point_cloud_uncertainty_out", "base::MatrixXd").
+    output_port("point_cloud_uncertainty_out", "std::vector<base::Matrix3d>").
         doc "One-Sigma uncertainty variance for the 3D features. Rk"
 
     output_port("point_cloud_samples_out",  'base::samples::Pointcloud').

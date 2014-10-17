@@ -341,7 +341,8 @@ viso2::Viso2Info StereoOdometer::computeStereoOdometer(const base::Time &ts, con
 
         /** Re-arrange the point cloud and compute the uncertainty **/
         base::samples::Pointcloud pointcloud;
-        base::MatrixXd pointsVar, deltaJacobCurr, deltaJacobPrev;
+        std::vector<base::Matrix3d> pointsVar;
+        base::MatrixXd deltaJacobCurr, deltaJacobPrev;
         this->postProcessPointCloud (hashIdx, hashPointcloud, pointcloud, pointsVar, deltaJacobCurr, deltaJacobPrev);
 
         /** Port out the information **/
@@ -354,7 +355,7 @@ viso2::Viso2Info StereoOdometer::computeStereoOdometer(const base::Time &ts, con
         #ifdef DEBUG_PRINTS
         std::cout<<"Jacobian Current is "<<deltaJacobCurr.rows()<<" x "<<deltaJacobCurr.cols()<<"\n";
         std::cout<<"Jacobian Previous is "<<deltaJacobPrev.rows()<<" x "<<deltaJacobPrev.cols()<<"\n";
-        std::cout<<"Uncertainty is "<<pointsVar.rows()<<" x "<<pointsVar.cols()<<"\n";
+        std::cout<<"Uncertainty is "<<pointsVar.size()<<"\n";
         #endif
 
 
@@ -603,7 +604,7 @@ void StereoOdometer::postProcessPointCloud (boost::unordered_map< int32_t, int32
                                     boost::circular_buffer< std::map < int32_t, HashPoint, std::less<int32_t>,
                                         Eigen::aligned_allocator< std::pair < const int32_t, HashPoint > > > > &hashPointcloud,
                                     base::samples::Pointcloud &pointcloud,
-                                    base::MatrixXd &pointsVar,
+                                    std::vector<base::Matrix3d> pointsVar,
                                     base::MatrixXd &deltaJacobCurr,
                                     base::MatrixXd &deltaJacobPrev)
 {
@@ -625,7 +626,7 @@ void StereoOdometer::postProcessPointCloud (boost::unordered_map< int32_t, int32
     {
         pointcloud.points.resize(hashPointcloud[0].size());
         pointcloud.colors.resize(hashPointcloud[0].size());
-        pointsVar.resize(3, 3*hashPointcloud[0].size());
+        pointsVar.resize(hashPointcloud[0].size());
         deltaJacobCurr.resize(3, hashPointcloud[0].size());
         deltaJacobPrev.resize(3, hashPointcloud[1].size());
     }
@@ -651,7 +652,7 @@ void StereoOdometer::postProcessPointCloud (boost::unordered_map< int32_t, int32
         #endif
 
         /** The uncertainty of the current points **/
-        pointsVar.block<3, 3>(0,3*index) = point.cov;
+        pointsVar[index] = point.cov;
 
         /** Look in the previous point cloud **/
         if (hashPointcloud[1].find(prevIdx) != hashPointcloud[1].end())
