@@ -8,12 +8,14 @@
 /** Opencv for the conversion **/
 #include <opencv/cv.h>
 #include <opencv2/core/core.hpp>
+#include <opencv2/core/eigen.hpp>
 #include <opencv/highgui.h>
 
 /** Rock libraries **/
 #include "frame_helper/FrameHelper.h" /** Rock lib for manipulate frames **/
 #include "frame_helper/FrameHelperTypes.h" /** Types for FrameHelper **/
 #include "frame_helper/Calibration.h" /** Rock type for camera calibration parameters **/
+#include "frame_helper/CalibrationCv.h" /** Rock type for camera OpenCv calibration **/
 
 /** Rock Types **/
 #include <base/samples/RigidBodyState.hpp>
@@ -84,6 +86,9 @@ namespace viso2 {
         //Intrinsic and extrinsic parameters for the pinhole camera model
         frame_helper::StereoCalibration cameracalib;
 
+        /** Open Cv calibration for the perspective transformation Matrix Q **/
+        frame_helper::StereoCalibrationCv cameracalibCv;
+
         /******************************************/
         /*** General Internal Storage Variables ***/
         /******************************************/
@@ -91,7 +96,6 @@ namespace viso2 {
         boost::circular_buffer<base::samples::frame::FramePair> imagePair; /** Left and right images **/
         frame_helper::FrameHelper frameHelperLeft, frameHelperRight; /** Frame helper **/
         Eigen::Matrix4d Q; /** Re-projection matrix **/
-        Eigen::Affine3d tf; /** Transformer transformation **/
         ::base::samples::frame::Frame leftColorImage;/** coloring point clouds (if selected) */
         ::base::Matrix2d pxleftVar, pxrightVar; /** Error variance of image plane in pixel units **/
         boost::unordered_map< int32_t, int32_t > hashIdx; /** current to previous index **/
@@ -188,7 +192,7 @@ namespace viso2 {
 
         /** @brief Computes one step of stereo visual odometry
          */
-        viso2::Viso2Info computeStereoOdometer(const base::Time &ts);
+        viso2::Viso2Info computeStereoOdometer(const base::Time &ts, const Eigen::Affine3d &tf);
 
         void drawMatches(const base::samples::frame::Frame &image1, const base::samples::frame::Frame &image2,
                         const std::vector<Matcher::p_match> &matches, const std::vector<int32_t>& inlier_indices, base::samples::frame::Frame &imageOutput);
@@ -197,7 +201,8 @@ namespace viso2 {
                         const std::vector<Matcher::p_match> &matches, const VisualOdometryStereo::parameters &viso2param,
                         base::samples::DistanceImage &distImage);
 
-        void createPointCloud(const base::samples::frame::Frame &image1,
+        void createPointCloud(const Eigen::Affine3d &tf,
+                        const base::samples::frame::Frame &image1,
                         const std::vector<Matcher::p_match> &matches,
                         const std::vector<int32_t>& inlier_indices,
                         const Eigen::Matrix4d &Q,

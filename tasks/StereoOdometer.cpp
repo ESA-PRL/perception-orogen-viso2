@@ -29,12 +29,20 @@ StereoOdometer::~StereoOdometer()
 
 void StereoOdometer::left_frameTransformerCallback(const base::Time &ts, const ::RTT::extras::ReadOnlyPointer< ::base::samples::frame::Frame > &left_frame_sample)
 {
+    Eigen::Affine3d tf; /** Transformer transformation **/
     imagePair[0].first.time = left_frame_sample->time; //time of the left image
 
     #ifdef DEBUG_PRINTS
     //RTT::log(RTT::Warning) << "[VISO2 LEFT_FRAME] Frame arrived at: " <<left_frame_sample->time.toMicroseconds()<< RTT::endlog();
     std::cout << "[VISO2 LEFT_FRAME] Frame arrived at: " <<left_frame_sample->time.toString()<< std::endl;
     #endif
+
+    /** Get the transformation (transformation) Tbody_left_camera which is body = Tbody_left_camera left_camera **/
+    if (!_left_camera2body.get(ts, tf, false))
+    {
+        throw std::runtime_error("[VISO2] [FATAL ERROR]: transformation for transformer not found.");
+	return;
+    }
 
     /** The image need to be in gray scale and undistorted **/
     imagePair[0].first.init(left_frame_sample->size.width, left_frame_sample->size.height, left_frame_sample->getDataDepth(), base::samples::frame::MODE_GRAYSCALE);
@@ -58,7 +66,7 @@ void StereoOdometer::left_frameTransformerCallback(const base::Time &ts, const :
 
         std::clock_t begin = std::clock();
 
-        viso2::Viso2Info viso2_info = this->computeStereoOdometer(ts);
+        viso2::Viso2Info viso2_info = this->computeStereoOdometer(ts, tf);
 
         std::clock_t end = std::clock();
         viso2_info.compute_time = ::base::Time::fromSeconds(static_cast<double>(end - begin) / CLOCKS_PER_SEC);
@@ -74,12 +82,20 @@ void StereoOdometer::left_frameTransformerCallback(const base::Time &ts, const :
 
 void StereoOdometer::right_frameTransformerCallback(const base::Time &ts, const ::RTT::extras::ReadOnlyPointer< ::base::samples::frame::Frame > &right_frame_sample)
 {
+    Eigen::Affine3d tf; /** Transformer transformation **/
     imagePair[0].second.time = right_frame_sample->time; //time stamp for the right image
 
     #ifdef DEBUG_PRINTS
     //RTT::log(RTT::Warning) << "[VISO2 RIGHT_FRAME] Frame arrived at: " <<right_frame_sample->time.toMicroseconds()<< RTT::endlog();
     std::cout<< "[VISO2 RIGHT_FRAME] Frame arrived at: " <<right_frame_sample->time.toString()<<std::endl;
     #endif
+
+    /** Get the transformation (transformation) Tbody_left_camera which is body = Tbody_left_camera left_camera **/
+    if (!_left_camera2body.get(ts, tf, false))
+    {
+        throw std::runtime_error("[VISO2] [FATAL ERROR]: transformation for transformer not found.");
+	return;
+    }
 
     /** Correct distortion in image right **/
     imagePair[0].second.init(right_frame_sample->size.width, right_frame_sample->size.height, right_frame_sample->getDataDepth(), base::samples::frame::MODE_GRAYSCALE);
@@ -98,7 +114,7 @@ void StereoOdometer::right_frameTransformerCallback(const base::Time &ts, const 
         #endif
         std::clock_t begin = std::clock();
 
-        viso2::Viso2Info viso2_info = this->computeStereoOdometer(ts);
+        viso2::Viso2Info viso2_info = this->computeStereoOdometer(ts, tf);
 
         std::clock_t end = std::clock();
         viso2_info.compute_time = ::base::Time::fromSeconds(static_cast<double>(end - begin) / CLOCKS_PER_SEC);
@@ -137,13 +153,10 @@ bool StereoOdometer::configureHook()
     viso2param.calib.cv = 0.5*(cameracalib.camLeft.cy + cameracalib.camRight.cy);
 
     /** Re-projection Q matrix **/
-    Q = Eigen::Matrix4d::Zero();
-    Q(0,0) = Q(1,1) = 1.0;
-    Q(3,2) = 1.0/viso2param.base;
-    Q(0,3) = -cameracalib.camRight.cx;
-    Q(1,3) = -cameracalib.camRight.cy;
-    Q(2,3) = cameracalib.camRight.fx;
-    Q(3,3) = (cameracalib.camRight.cx - cameracalib.camLeft.cx)/viso2param.base;
+    cameracalibCv.setCalibration(cameracalib);
+    cameracalibCv.setImageSize(cv::Size(cameracalib.camLeft.width, cameracalib.camLeft.height));
+    cameracalibCv.initCv();
+    cv::cv2eigen(cameracalibCv.Q, Q);
 
     #ifdef DEBUG_PRINTS
     std::cout<< "[VISO2 CONFIGURATION] Q re-projection matrix:\n "<<Q<<"\n";
@@ -195,9 +208,6 @@ bool StereoOdometer::configureHook()
     /** Hash Table of indexes **/
     hashPointcloud.set_capacity(DEFAULT_CIRCULAR_BUFFER_SIZE);
 
-    /** Transformer initial matrix **/
-    tf = Eigen::Affine3d::Identity();
-
     return true;
 }
 
@@ -224,7 +234,7 @@ void StereoOdometer::cleanupHook()
     StereoOdometerBase::cleanupHook();
 }
 
-viso2::Viso2Info StereoOdometer::computeStereoOdometer(const base::Time &ts)
+viso2::Viso2Info StereoOdometer::computeStereoOdometer(const base::Time &ts, const Eigen::Affine3d &tf)
 {
     uint8_t *l_image_data, *r_image_data;
     viso2::Viso2Info viso2_info;
@@ -232,9 +242,6 @@ viso2::Viso2Info StereoOdometer::computeStereoOdometer(const base::Time &ts)
     /** Time **/
     viso2_info.time = ts;
     viso2_info.num_matches = ::base::NaN<double>();
-
-    /** Get the transformation (transformation) Tbody_left_camera which is body = Tbody_left_camera left_camera **/
-    _left_camera2body.get(ts, tf, false);
 
     /** Delta pose **/
     base::samples::RigidBodyState deltaPoseOut;
@@ -329,7 +336,7 @@ viso2::Viso2Info StereoOdometer::computeStereoOdometer(const base::Time &ts)
         }
 
         /** Create the point cloud from the current pair **/
-        this->createPointCloud(leftColorImage, viso->getMatches(),
+        this->createPointCloud(tf, leftColorImage, viso->getMatches(),
                             viso->getInlierIndices(), Q, deltaPose, hashIdx, hashPointcloud);
 
         /** Re-arrange the point cloud and compute the uncertainty **/
@@ -337,15 +344,12 @@ viso2::Viso2Info StereoOdometer::computeStereoOdometer(const base::Time &ts)
         base::MatrixXd pointsVar, deltaJacobCurr, deltaJacobPrev;
         this->postProcessPointCloud (hashIdx, hashPointcloud, pointcloud, pointsVar, deltaJacobCurr, deltaJacobPrev);
 
-         if (_output_debug.value())
-        {
-            /** Port out the information **/
-            pointcloud.time = imagePair[0].time;
-            _point_cloud_samples_out.write(pointcloud);
-            _point_cloud_uncertainty_out.write(pointsVar);
-            _delta_pose_jacobians_current_out.write(deltaJacobCurr);
-            _delta_pose_jacobians_previous_out.write(deltaJacobPrev);
-        }
+        /** Port out the information **/
+        pointcloud.time = imagePair[0].time;
+        _point_cloud_samples_out.write(pointcloud);
+        _point_cloud_uncertainty_out.write(pointsVar);
+        _delta_pose_jacobians_k_m_out.write(deltaJacobCurr);
+        _delta_pose_jacobians_k_out.write(deltaJacobPrev);
 
         #ifdef DEBUG_PRINTS
         std::cout<<"Jacobian Current is "<<deltaJacobCurr.rows()<<" x "<<deltaJacobCurr.cols()<<"\n";
@@ -431,7 +435,8 @@ void StereoOdometer::createDistanceImage(const base::samples::frame::Frame &imag
     }
 }
 
-void StereoOdometer::createPointCloud(const base::samples::frame::Frame &image1,
+void StereoOdometer::createPointCloud(const Eigen::Affine3d &tf,
+                        const base::samples::frame::Frame &image1,
                         const std::vector<Matcher::p_match> &matches,
                         const std::vector<int32_t>& inlier_indices,
                         const Eigen::Matrix4d &Q,
@@ -465,12 +470,13 @@ void StereoOdometer::createPointCloud(const base::samples::frame::Frame &image1,
 
         /** 3D Point **/
         //std::cout<<"image_point["<<i<<"] "<<match.u1c <<" "<<match.v1c<<"\n";
-        base::Vector3d point (match.u1c + Q(0,3),  match.v1c + Q(1,3), Q(2,3));
-        //std::cout<<"point["<<i<<"] "<<point[0] <<" "<<point[1]<<" "<<point[2]<<"\n";
         double disparity = match.u1c - match.u2c;
-        double W  = Q(3,2)*disparity + Q(3,3);
-        point = point * (1.0/W);
-        //std::cout<<"3dpoint["<<i<<"] "<<point[0] <<" "<<point[1]<<" "<<point[2]<<"\n";
+        base::Vector4d image_point (match.u1c, match.v1c, disparity, 1);
+        base::Vector4d homogeneous_point = Q * image_point;
+        base::Vector3d point (homogeneous_point(0)/homogeneous_point(3),
+                                      homogeneous_point(1)/homogeneous_point(3),
+                                      homogeneous_point(2)/homogeneous_point(3));
+        //std::cout<<"point["<<i<<"] "<<point[0] <<" "<<point[1]<<" "<<point[2]<<"\n";
 
         /** Point in the desired frame **/
         point = tf * point;
@@ -584,7 +590,7 @@ base::Vector3d StereoOdometer::computeFeaturesJacobian (const Eigen::Affine3d &d
     base::Vector3d Jcolumn;
 
     /** Experimental **/
-    Jcolumn = deltaPose * point;
+    Jcolumn = point - deltaPose * point;
 
     #ifdef DEBUG_PRINTS
     std::cout<< "J column dx: "<<Jcolumn[0]<<" dy: "<<Jcolumn[1]<<" dz: "<<Jcolumn[2]<<"\n";

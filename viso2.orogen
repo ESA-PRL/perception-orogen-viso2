@@ -85,14 +85,17 @@ task_context "StereoOdometer" do
     output_port("delta_pose_samples_out", "/base/samples/RigidBodyState").
         doc "Delta estimated pose in body frame. Tbodyk-1_bodyk"
 
-    output_port("delta_pose_jacobians_current_out", "base::MatrixXd").
-        doc "Jacobian of 3D images features. J^k,k-1_k"
+    output_port("delta_pose_jacobians_k_out", "base::MatrixXd").
+        doc "Jacobian of previous 3D images features. J^k_{k,k+m}"
 
-    output_port("delta_pose_jacobians_previous_out", "base::MatrixXd").
-        doc "Jacobian of 3D images features. J^k-1,k-1_k"
+    output_port("delta_pose_jacobians_k_m_out", "base::MatrixXd").
+        doc "Jacobian of current 3D images features. J^k+m_{k,k+m}"
 
     output_port("point_cloud_uncertainty_out", "base::MatrixXd").
         doc "One-Sigma uncertainty variance for the 3D features. Rk"
+
+    output_port("point_cloud_samples_out",  'base::samples::Pointcloud').
+        doc 'Point Cloud representation of the 3D features.'
 
     output_port('viso2_info', 'viso2/Viso2Info').
 	doc 'Visual Odometry extra information port.'
@@ -109,9 +112,6 @@ task_context "StereoOdometer" do
     output_port("frame_samples_out",  ro_ptr('base::samples::frame::Frame')).
         doc 'Intra (Left - Right) frame correspondences image.'+
             'Inter (Keypoints) in the image.'
-
-    output_port("point_cloud_samples_out",  'base::samples::Pointcloud').
-        doc 'Point Cloud representation of the 3D features.'
 
     port_driven
 end
