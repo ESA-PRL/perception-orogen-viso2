@@ -218,7 +218,7 @@ namespace viso2 {
                                     boost::circular_buffer< std::map < int32_t, HashPoint, std::less<int32_t>,
                                         Eigen::aligned_allocator< std::pair < const int32_t, HashPoint > > > > &hashPointcloud,
                                     base::samples::Pointcloud &pointcloud,
-                                    std::vector<base::Matrix3d> pointsVar,
+                                    std::vector<base::Matrix3d> &pointsVar,
                                     base::MatrixXd &deltaJacobCurr,
                                     base::MatrixXd &deltaJacobPrev);
 

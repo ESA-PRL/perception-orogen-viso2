@@ -604,7 +604,7 @@ void StereoOdometer::postProcessPointCloud (boost::unordered_map< int32_t, int32
                                     boost::circular_buffer< std::map < int32_t, HashPoint, std::less<int32_t>,
                                         Eigen::aligned_allocator< std::pair < const int32_t, HashPoint > > > > &hashPointcloud,
                                     base::samples::Pointcloud &pointcloud,
-                                    std::vector<base::Matrix3d> pointsVar,
+                                    std::vector<base::Matrix3d> &pointsVar,
                                     base::MatrixXd &deltaJacobCurr,
                                     base::MatrixXd &deltaJacobPrev)
 {
@@ -614,6 +614,8 @@ void StereoOdometer::postProcessPointCloud (boost::unordered_map< int32_t, int32
     std::cout<<"hashIdx has size: "<< hashIdx.size()<<"\n";
     #endif
 
+    /** This is because in the creation of the of the point cloud the first time only the current is create **/
+    /** TO-DO: change it that it also create the previous point cloud in case is the first 2 pars of images **/
     if (hashIdx.size() < 2.0 || hashPointcloud.size() < 2.0)
     {
         #ifdef DEBUG_PRINTS
@@ -624,11 +626,12 @@ void StereoOdometer::postProcessPointCloud (boost::unordered_map< int32_t, int32
 
     try
     {
+        /** Resize variables to the number of elements in the current point cloud **/
         pointcloud.points.resize(hashPointcloud[0].size());
         pointcloud.colors.resize(hashPointcloud[0].size());
         pointsVar.resize(hashPointcloud[0].size());
         deltaJacobCurr.resize(3, hashPointcloud[0].size());
-        deltaJacobPrev.resize(3, hashPointcloud[1].size());
+        deltaJacobPrev.resize(3, hashPointcloud[0].size());
     }
     catch (const std::bad_alloc&)
     {
@@ -637,36 +640,39 @@ void StereoOdometer::postProcessPointCloud (boost::unordered_map< int32_t, int32
     }
 
     register size_t index = 0;
-    register size_t indexPrev = 0;
     for(std::map<int32_t, HashPoint>::iterator it = hashPointcloud[0].begin(); it != hashPointcloud[0].end(); ++it)
     {
-        int32_t prevIdx = hashIdx.at(it->first);
 
         /** The point to the point cloud **/
         HashPoint point = it->second;
-        pointcloud.points[index] = point.point;
-        pointcloud.colors[index] = point.color;
+        pointcloud.points[index] = point.point; // Coordinates
+        pointcloud.colors[index] = point.color; // Color
+        pointsVar[index] = point.cov; // Uncertainty
+
+        /** Get the idx on the previous point cloud **/
+        int32_t prevIdx = hashIdx.at(it->first);
+
         #ifdef DEBUG_PRINTS
         std::cout<<"IDX["<<index<<"]: "<<it->first<<" -> "<<prevIdx<<"\n";
         std::cout<<"POINT: "<<point.point[0]<<" "<<point.point[1]<<" "<<point.point[2]<<"\n";
         #endif
 
-        /** The uncertainty of the current points **/
-        pointsVar[index] = point.cov;
 
         /** Look in the previous point cloud **/
         if (hashPointcloud[1].find(prevIdx) != hashPointcloud[1].end())
         {
+            /** Get the point at the previous point cloud **/
+            HashPoint point_prev = hashPointcloud[1][prevIdx];
+
             #ifdef DEBUG_PRINTS
-            HashPoint pointPrev = hashPointcloud[1][prevIdx];
-            std::cout<<"FOUND PREV: "<<pointPrev.point[0]<<" "<<pointPrev.point[1]<<" "<<pointPrev.point[2]<<"\n";
+            std::cout<<"FOUND PREV: "<<point_prev.point[0]<<" "<<point_prev.point[1]<<" "<<point_prev.point[2]<<"\n";
             #endif
 
-            /** Get the Jacobian **/
+            /** Get the current Jacobian **/
             deltaJacobCurr.col(index) = point.jacobian;
-            deltaJacobPrev.col(indexPrev) = point.jacobian;
 
-            indexPrev++;
+            /** Get the previous Jacobian **/
+            deltaJacobPrev.col(index) = point_prev.jacobian;
         }
         else
         {
@@ -674,10 +680,13 @@ void StereoOdometer::postProcessPointCloud (boost::unordered_map< int32_t, int32
             std::cout<<"NOT FOUND\n";
             #endif
 
-            /** Set the Jacobian **/
+            /** Set the current Jacobian to Zero**/
             deltaJacobCurr.col(index).setZero();
 
+            /** Set the previous Jacobian to Zero**/
+            deltaJacobPrev.col(index).setZero();
         }
+
         index++;
     }
 

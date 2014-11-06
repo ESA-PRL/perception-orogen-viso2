@@ -18,6 +18,7 @@
   <depend package="image_processing/viso2" />
   <depend package="image_processing/frame_helper"/>
 
-  <tags>Debug</tags>
+  <!--  <tags>Debug</tags> -->
+  <tags>stable</tags>
 
 </package>
