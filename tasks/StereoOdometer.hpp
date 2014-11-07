@@ -42,7 +42,7 @@ namespace viso2 {
 
     struct HashPoint
     {
-        int32_t p_Idx; /* Previous left frame idx of this feature point **/
+        size_t idx; /* Index in the point cloud **/
         base::Vector3d point; /** 3d coordinate **/
         base::Vector4d color; /** Color info **/
         base::Matrix3d cov; /** Covariance matrix of the 3d point**/
@@ -219,6 +219,7 @@ namespace viso2 {
                                         Eigen::aligned_allocator< std::pair < const int32_t, HashPoint > > > > &hashPointcloud,
                                     base::samples::Pointcloud &pointcloud,
                                     std::vector<base::Matrix3d> &pointsVar,
+                                    std::vector<size_t> &pointsIdx,
                                     base::MatrixXd &deltaJacobCurr,
                                     base::MatrixXd &deltaJacobPrev);
 
