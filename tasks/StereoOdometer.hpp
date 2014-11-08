@@ -219,7 +219,7 @@ namespace viso2 {
                                         Eigen::aligned_allocator< std::pair < const int32_t, HashPoint > > > > &hashPointcloud,
                                     base::samples::Pointcloud &pointcloud,
                                     std::vector<base::Matrix3d> &pointsVar,
-                                    std::vector<size_t> &pointsIdx,
+                                    std::vector<unsigned int> &pointsIdx,
                                     base::MatrixXd &deltaJacobCurr,
                                     base::MatrixXd &deltaJacobPrev);
 

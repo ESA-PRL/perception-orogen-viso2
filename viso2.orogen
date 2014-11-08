@@ -91,7 +91,7 @@ task_context "StereoOdometer" do
     output_port("point_cloud_samples_out",  'base::samples::Pointcloud').
         doc 'Point Cloud representation of the 3D features.'
 
-    output_port("point_cloud_indexes_out", "std::vector<size_t>").
+    output_port("point_cloud_indexes_out", "std::vector<unsigned int>").
         doc "Indexes with respect to the previous -> next features."
 
     output_port("delta_pose_jacobians_k_out", "base::MatrixXd").

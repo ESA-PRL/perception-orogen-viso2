@@ -342,7 +342,7 @@ viso2::Viso2Info StereoOdometer::computeStereoOdometer(const base::Time &ts, con
         /** Re-arrange the point cloud and compute the uncertainty **/
         base::samples::Pointcloud pointcloud;
         std::vector<base::Matrix3d> pointsVar;
-        std::vector<size_t> pointsIdx;
+        std::vector<unsigned int> pointsIdx;
         base::MatrixXd deltaJacobCurr, deltaJacobPrev;
         this->postProcessPointCloud (hashIdx, hashPointcloud, pointcloud, pointsVar, pointsIdx, deltaJacobCurr, deltaJacobPrev);
 
@@ -389,7 +389,7 @@ void StereoOdometer::drawMatches(const base::samples::frame::Frame &image1,
 
     //std::cout<<"[drawMatches] number of features: "<<inlier_indices.size()<<"\n";
 
-    for (size_t i = 0; i < inlier_indices.size(); ++i)
+    for (register std::size_t i = 0; i < inlier_indices.size(); ++i)
     {
         const Matcher::p_match& match = matches[inlier_indices[i]];
         #ifdef DEBUG_PRINTS
@@ -461,7 +461,7 @@ void StereoOdometer::createPointCloud(const Eigen::Affine3d &tf,
         Eigen::Matrix2d::Zero(), pxrightVar;
 
     /** Create the hash table with the point cloud **/
-    for (register size_t i = 0; i <inlier_indices.size(); ++i)
+    for (register std::size_t i = 0; i <inlier_indices.size(); ++i)
     {
         const Matcher::p_match& match = matches[inlier_indices[i]];
         HashPoint hashPoint;
@@ -527,7 +527,7 @@ void StereoOdometer::createPointCloud(const Eigen::Affine3d &tf,
     hashIdx = localHashIdx;
 
     /** Order the point cloud by match indexes **/
-    size_t index = 0;
+    register unsigned int index = 0;
     std::map < int32_t, HashPoint, std::less<int32_t>,
         Eigen::aligned_allocator< std::pair < const int32_t, HashPoint > > > orderedPointcloud;
     std::map<int32_t, int32_t> orderedIdx(localHashIdx.begin(), localHashIdx.end());
@@ -610,7 +610,7 @@ void StereoOdometer::postProcessPointCloud (boost::unordered_map< int32_t, int32
                                         Eigen::aligned_allocator< std::pair < const int32_t, HashPoint > > > > &hashPointcloud,
                                     base::samples::Pointcloud &pointcloud,
                                     std::vector<base::Matrix3d> &pointsVar,
-                                    std::vector<size_t> &pointsIdx,
+                                    std::vector<unsigned int> &pointsIdx,
                                     base::MatrixXd &deltaJacobCurr,
                                     base::MatrixXd &deltaJacobPrev)
 {
@@ -627,20 +627,21 @@ void StereoOdometer::postProcessPointCloud (boost::unordered_map< int32_t, int32
         pointcloud.points.resize(hashPointcloud[0].size());
         pointcloud.colors.resize(hashPointcloud[0].size());
         pointsVar.resize(hashPointcloud[0].size());
-        pointsIdx.resize(hashPointcloud[0].size());
         deltaJacobCurr.resize(3, hashPointcloud[0].size());
         deltaJacobCurr.setZero();
         deltaJacobPrev.resize(3, hashPointcloud[0].size());
         deltaJacobPrev.setZero();
-    }
+
+        if (hashPointcloud.size() >= 2.0)
+            pointsIdx.resize(hashPointcloud[1].size(), UINT_MAX);
+   }
     catch (const std::bad_alloc&)
     {
         RTT::log(RTT::Warning)<<"[EXCEPTION] Catching bad_alloc exception."<<RTT::endlog();
         return;
     }
 
-    register size_t index = 0;
-    register size_t index_previous = 0;
+    register unsigned int index = 0;
     for(std::map<int32_t, HashPoint>::iterator it = hashPointcloud[0].begin(); it != hashPointcloud[0].end(); ++it)
     {
 
@@ -659,7 +660,7 @@ void StereoOdometer::postProcessPointCloud (boost::unordered_map< int32_t, int32
         #endif
 
 
-        if (hashPointcloud.size() == 2.0)
+        if (hashPointcloud.size() >= 2.0)
         {
             std::map<int32_t, HashPoint>::iterator itPrev = hashPointcloud[1].find(prevIdx);
 
@@ -680,6 +681,7 @@ void StereoOdometer::postProcessPointCloud (boost::unordered_map< int32_t, int32
                 deltaJacobPrev.col(index) = point_prev.jacobian;
 
                 /** Vector of indexes **/
+                std::cout<<"prev_idx "<< point_prev.idx<<" -> index "<< index <<"\n";
                 pointsIdx[point_prev.idx] = index;
             }
             else
@@ -693,7 +695,6 @@ void StereoOdometer::postProcessPointCloud (boost::unordered_map< int32_t, int32
 
                 /** Set the previous Jacobian to Zero**/
                 deltaJacobPrev.col(index).setZero();
-
             }
         }
 
