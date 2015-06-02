@@ -19,6 +19,7 @@
 
 /** Rock Types **/
 #include <base/samples/RigidBodyState.hpp>
+#include <base/samples/DistanceImage.hpp>
 
 /** Standard **/
 #include <vector>
