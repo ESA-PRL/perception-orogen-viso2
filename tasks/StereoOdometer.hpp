@@ -100,7 +100,7 @@ namespace viso2 {
         ::base::Matrix2d pxleftVar, pxrightVar; /** Error variance of image plane in pixel units **/
         boost::unordered_map< int32_t, int32_t > hashIdx; /** current to previous index **/
         boost::circular_buffer< std::map < int32_t, HashPoint, std::less<int32_t>,
-            Eigen::aligned_allocator< std::pair < const int32_t, HashPoint > > > > hashPointcloud; /** Circular buffer of hash Point Cloud **/
+        Eigen::aligned_allocator< std::pair < const int32_t, HashPoint > > > > hashPointcloud; /** Circular buffer of hash Point Cloud **/
 
         /***************************/
         /** Output Port Variables **/

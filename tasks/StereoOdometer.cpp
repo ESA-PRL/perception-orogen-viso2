@@ -41,7 +41,7 @@ void StereoOdometer::left_frameTransformerCallback(const base::Time &ts, const :
     if (!_left_camera2body.get(ts, tf, false))
     {
         throw std::runtime_error("[VISO2] [FATAL ERROR]: transformation for transformer not found.");
-	return;
+        return;
     }
 
     /** The image need to be in gray scale and undistorted **/
@@ -94,7 +94,7 @@ void StereoOdometer::right_frameTransformerCallback(const base::Time &ts, const 
     if (!_left_camera2body.get(ts, tf, false))
     {
         throw std::runtime_error("[VISO2] [FATAL ERROR]: transformation for transformer not found.");
-	return;
+        return;
     }
 
     /** Correct distortion in image right **/
@@ -274,7 +274,7 @@ viso2::Viso2Info StereoOdometer::computeStereoOdometer(const base::Time &ts, con
         deltaM = Eigen::Map<const Eigen::Matrix4d> (&(mdata[0]), 4, 4);
         deltaPose.matrix() = deltaM;
 
-        /** Transform the deltaPose in the desired frame **/
+        /** Transform the deltaPose in the body frame **/
         deltaPose = tf * deltaPose * tf.inverse();
 
         /** On success, update current pose **/
@@ -507,7 +507,7 @@ void StereoOdometer::createPointCloud(const Eigen::Affine3d &tf,
         hashPoint.cov = noiseJacobian * pxVar * noiseJacobian.transpose();
 
         /** Covariance in the desired frame **/
-        hashPoint.cov = tf.rotation() * hashPoint.cov;
+        hashPoint.cov = tf.rotation() * hashPoint.cov * tf.rotation().transpose();
 
         #ifdef DEBUG_PRINTS
         std::cout<<"Point var:\n"<<hashPoint.cov <<"\n";
