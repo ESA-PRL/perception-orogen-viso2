@@ -38,7 +38,11 @@ void StereoOdometer::left_frameTransformerCallback(const base::Time &ts, const :
     #endif
 
     /** Get the transformation (transformation) Tbody_left_camera which is body = Tbody_left_camera left_camera **/
-    if (!_left_camera2body.get(ts, tf, false))
+    if (_body_frame.value().compare(_left_camera_frame.value()) == 0)
+    {
+        tf.setIdentity();
+    }
+    else if (!_left_camera2body.get(ts, tf, false))
     {
         throw std::runtime_error("[VISO2] [FATAL ERROR]: transformation for transformer not found.");
         return;
@@ -91,7 +95,11 @@ void StereoOdometer::right_frameTransformerCallback(const base::Time &ts, const 
     #endif
 
     /** Get the transformation (transformation) Tbody_left_camera which is body = Tbody_left_camera left_camera **/
-    if (!_left_camera2body.get(ts, tf, false))
+    if (_body_frame.value().compare(_left_camera_frame.value()) == 0)
+    {
+        tf.setIdentity();
+    }
+    else if (!_left_camera2body.get(ts, tf, false))
     {
         throw std::runtime_error("[VISO2] [FATAL ERROR]: transformation for transformer not found.");
         return;
@@ -473,13 +481,15 @@ void StereoOdometer::createPointCloud(const Eigen::Affine3d &tf,
 
         /** 3D Point **/
         //std::cout<<"image_point["<<i<<"] "<<match.u1c <<" "<<match.v1c<<"\n";
-        double disparity = match.u1c - match.u2c;
+        double disparity = match.u2c - match.u1c;
         base::Vector4d image_point (match.u1c, match.v1c, disparity, 1);
         base::Vector4d homogeneous_point = Q * image_point;
         base::Vector3d point (homogeneous_point(0)/homogeneous_point(3),
                                       homogeneous_point(1)/homogeneous_point(3),
                                       homogeneous_point(2)/homogeneous_point(3));
-        //std::cout<<"point["<<i<<"] "<<point[0] <<" "<<point[1]<<" "<<point[2]<<"\n";
+       // base::Vector2d point2d(point[0]/point[2], point[1]/point[2]);
+       // std::cout<<"point["<<i<<"] "<<point[0] <<" "<<point[1]<<" "<<point[2]<<"\n";
+       // std::cout<<"point2d["<<i<<"] "<<point2d[0] <<" "<<point2d[1]<<"\n";
 
         /** Point in the desired frame **/
         point = tf * point;
@@ -510,6 +520,7 @@ void StereoOdometer::createPointCloud(const Eigen::Affine3d &tf,
         hashPoint.cov = tf.rotation() * hashPoint.cov * tf.rotation().transpose();
 
         #ifdef DEBUG_PRINTS
+        std::cout<<"Point:\n"<<hashPoint.point <<"\n";
         std::cout<<"Point var:\n"<<hashPoint.cov <<"\n";
         #endif
 
