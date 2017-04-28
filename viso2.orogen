@@ -64,9 +64,9 @@ task_context "StereoOdometer" do
     #******* Transformer  *********
     #******************************
     transformer do
-        transform "left_camera", "body" # left_camera to body in "Source in target" convention
-    	align_port("left_frame", 0.5)
-    	align_port("right_frame", 0.5)
+        transform "left_camera_viso2", "body" # left_camera to body in "Source in target" convention
+    	align_port("left_frame", 0.2)
+    	align_port("right_frame", 0.2)
     	max_latency(1.0)
     end
 

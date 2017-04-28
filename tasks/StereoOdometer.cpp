@@ -2,7 +2,7 @@
 
 #include "StereoOdometer.hpp"
 
-#define DEBUG_PRINTS 1
+//#define DEBUG_PRINTS 1
 
 #ifndef D2R
 #define D2R M_PI/180.00 /** Convert degree to radian **/
@@ -32,17 +32,17 @@ void StereoOdometer::left_frameTransformerCallback(const base::Time &ts, const :
     Eigen::Affine3d tf; /** Transformer transformation **/
     imagePair[0].first.time = left_frame_sample->time; //time of the left image
 
-    #ifdef DEBUG_PRINTS
+  //  #ifdef DEBUG_PRINTS
     //RTT::log(RTT::Warning) << "[VISO2 LEFT_FRAME] Frame arrived at: " <<left_frame_sample->time.toMicroseconds()<< RTT::endlog();
     std::cout << "[VISO2 LEFT_FRAME] Frame arrived at: " <<left_frame_sample->time.toString()<< std::endl;
-    #endif
+ //   #endif
 
     /** Get the transformation (transformation) Tbody_left_camera which is body = Tbody_left_camera left_camera **/
-    if (_body_frame.value().compare(_left_camera_frame.value()) == 0)
+    if (_body_frame.value().compare(_left_camera_viso2_frame.value()) == 0)
     {
         tf.setIdentity();
     }
-    else if (!_left_camera2body.get(ts, tf, false))
+    else if (!_left_camera_viso22body.get(ts, tf, false))
     {
         throw std::runtime_error("[VISO2] [FATAL ERROR]: transformation for transformer not found.");
         return;
@@ -64,9 +64,9 @@ void StereoOdometer::left_frameTransformerCallback(const base::Time &ts, const :
     {
         imagePair[0].time = imagePair[0].first.time;
 
-        #ifdef DEBUG_PRINTS
+      //  #ifdef DEBUG_PRINTS
         std::cout<< "[VISO2 LEFT_FRAME] [ON] ("<<diffTime.toMicroseconds()<<")\n";
-        #endif
+   //     #endif
 
         std::clock_t begin = std::clock();
 
@@ -89,17 +89,17 @@ void StereoOdometer::right_frameTransformerCallback(const base::Time &ts, const 
     Eigen::Affine3d tf; /** Transformer transformation **/
     imagePair[0].second.time = right_frame_sample->time; //time stamp for the right image
 
-    #ifdef DEBUG_PRINTS
+   // #ifdef DEBUG_PRINTS
     //RTT::log(RTT::Warning) << "[VISO2 RIGHT_FRAME] Frame arrived at: " <<right_frame_sample->time.toMicroseconds()<< RTT::endlog();
     std::cout<< "[VISO2 RIGHT_FRAME] Frame arrived at: " <<right_frame_sample->time.toString()<<std::endl;
-    #endif
+ //   #endif
 
     /** Get the transformation (transformation) Tbody_left_camera which is body = Tbody_left_camera left_camera **/
-    if (_body_frame.value().compare(_left_camera_frame.value()) == 0)
+    if (_body_frame.value().compare(_left_camera_viso2_frame.value()) == 0)
     {
         tf.setIdentity();
     }
-    else if (!_left_camera2body.get(ts, tf, false))
+    else if (!_left_camera_viso22body.get(ts, tf, false))
     {
         throw std::runtime_error("[VISO2] [FATAL ERROR]: transformation for transformer not found.");
         return;
@@ -117,9 +117,9 @@ void StereoOdometer::right_frameTransformerCallback(const base::Time &ts, const 
     {
         imagePair[0].time = imagePair[0].second.time;
 
-        #ifdef DEBUG_PRINTS
-        std::cout<< "[VISO2 RIGHT_FRAME] [ON] ("<<diffTime.toMicroseconds()<<")\n";
-        #endif
+       // #ifdef DEBUG_PRINTS
+        std::cout<< "[VISO2 RIGHT_FRAME] [ON] ("<<diffTime.toMicroseconds()<< " " << _right_frame_period << ")\n";
+      //  #endif
         std::clock_t begin = std::clock();
 
         viso2::Viso2Info viso2_info = this->computeStereoOdometer(ts, tf);
@@ -692,7 +692,7 @@ void StereoOdometer::postProcessPointCloud (boost::unordered_map< int32_t, int32
                 deltaJacobPrev.col(index) = point_prev.jacobian;
 
                 /** Vector of indexes **/
-                std::cout<<"prev_idx "<< point_prev.idx<<" -> index "<< index <<"\n";
+               // std::cout<<"prev_idx "<< point_prev.idx<<" -> index "<< index <<"\n";
                 pointsIdx[point_prev.idx] = index;
             }
             else
