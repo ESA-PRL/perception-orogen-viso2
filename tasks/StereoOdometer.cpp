@@ -34,7 +34,7 @@ void StereoOdometer::left_frameTransformerCallback(const base::Time &ts, const :
 
   //  #ifdef DEBUG_PRINTS
     //RTT::log(RTT::Warning) << "[VISO2 LEFT_FRAME] Frame arrived at: " <<left_frame_sample->time.toMicroseconds()<< RTT::endlog();
-    std::cout << "[VISO2 LEFT_FRAME] Frame arrived at: " <<left_frame_sample->time.toString()<< std::endl;
+    //std::cout << "[VISO2 LEFT_FRAME] Frame arrived at: " <<left_frame_sample->time.toString()<< std::endl;
  //   #endif
 
     /** Get the transformation (transformation) Tbody_left_camera which is body = Tbody_left_camera left_camera **/
@@ -65,7 +65,7 @@ void StereoOdometer::left_frameTransformerCallback(const base::Time &ts, const :
         imagePair[0].time = imagePair[0].first.time;
 
       //  #ifdef DEBUG_PRINTS
-        std::cout<< "[VISO2 LEFT_FRAME] [ON] ("<<diffTime.toMicroseconds()<<")\n";
+       // std::cout<< "[VISO2 LEFT_FRAME] [ON] ("<<diffTime.toMicroseconds()<<")\n";
    //     #endif
 
         std::clock_t begin = std::clock();
@@ -91,7 +91,7 @@ void StereoOdometer::right_frameTransformerCallback(const base::Time &ts, const 
 
    // #ifdef DEBUG_PRINTS
     //RTT::log(RTT::Warning) << "[VISO2 RIGHT_FRAME] Frame arrived at: " <<right_frame_sample->time.toMicroseconds()<< RTT::endlog();
-    std::cout<< "[VISO2 RIGHT_FRAME] Frame arrived at: " <<right_frame_sample->time.toString()<<std::endl;
+    //std::cout<< "[VISO2 RIGHT_FRAME] Frame arrived at: " <<right_frame_sample->time.toString()<<std::endl;
  //   #endif
 
     /** Get the transformation (transformation) Tbody_left_camera which is body = Tbody_left_camera left_camera **/
@@ -118,7 +118,7 @@ void StereoOdometer::right_frameTransformerCallback(const base::Time &ts, const 
         imagePair[0].time = imagePair[0].second.time;
 
        // #ifdef DEBUG_PRINTS
-        std::cout<< "[VISO2 RIGHT_FRAME] [ON] ("<<diffTime.toMicroseconds()<< " " << _right_frame_period << ")\n";
+      //  std::cout<< "[VISO2 RIGHT_FRAME] [ON] ("<<diffTime.toMicroseconds()<< " " << _right_frame_period << ")\n";
       //  #endif
         std::clock_t begin = std::clock();
 
