@@ -15,8 +15,8 @@
   -->
   <depend package="base/types" />
   <depend package="drivers/orogen/transformer" />
-  <depend package="image_processing/viso2" />
-  <depend package="image_processing/frame_helper"/>
+  <depend package="perception/viso2" />
+  <depend package="perception/frame_helper"/>
 
   <!--  <tags>Debug</tags> -->
   <tags>stable</tags>
