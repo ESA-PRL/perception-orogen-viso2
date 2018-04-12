@@ -29,56 +29,76 @@ StereoOdometer::~StereoOdometer()
 
 void StereoOdometer::left_frameTransformerCallback(const base::Time &ts, const ::RTT::extras::ReadOnlyPointer< ::base::samples::frame::Frame > &left_frame_sample)
 {
-    Eigen::Affine3d tf; /** Transformer transformation **/
-    imagePair[0].first.time = left_frame_sample->time; //time of the left image
-
-  //  #ifdef DEBUG_PRINTS
-    //RTT::log(RTT::Warning) << "[VISO2 LEFT_FRAME] Frame arrived at: " <<left_frame_sample->time.toMicroseconds()<< RTT::endlog();
-    //std::cout << "[VISO2 LEFT_FRAME] Frame arrived at: " <<left_frame_sample->time.toString()<< std::endl;
- //   #endif
-
-    /** Get the transformation (transformation) Tbody_left_camera which is body = Tbody_left_camera left_camera **/
-    if (_body_frame.value().compare(_left_camera_viso2_frame.value()) == 0)
+    if (_motion_command.connected())
     {
-        tf.setIdentity();
+        if (_motion_command.read(motion_command) == RTT::NewData)
+        {
+            if ((motion_command.translation == 0.0) && (motion_command.rotation == 0.0))
+            {
+                moving = false;
+                std::cout << " StereoOdometer -> Robot not moving" << std::endl;
+            }
+            else
+                moving = true;
+        }
     }
-    else if (!_left_camera_viso22body.get(ts, tf, false))
+    else
     {
-        throw std::runtime_error("[VISO2] [FATAL ERROR]: transformation for transformer not found.");
-        return;
+        moving=true;
     }
-
-    /** The image need to be in gray scale and undistorted **/
-    imagePair[0].first.init(left_frame_sample->size.width, left_frame_sample->size.height, left_frame_sample->getDataDepth(), base::samples::frame::MODE_GRAYSCALE);
-    frameHelperLeft.convert (*left_frame_sample, imagePair[0].first, 0, 0, _resize_algorithm.value(), true);
-
-    /** Left color image **/
-    leftColorImage.init(left_frame_sample->size.width, left_frame_sample->size.height, left_frame_sample->getDataDepth(), base::samples::frame::MODE_RGB);
-    frameHelperLeft.convert (*left_frame_sample, leftColorImage, 0, 0, _resize_algorithm.value(), true);
-
-    /** Check the time difference between inertial sensors and joint samples **/
-    base::Time diffTime = imagePair[0].first.time - imagePair[0].second.time;
-
-    /** If the difference in time is less than half of a period run the odometry **/
-    if (diffTime.toSeconds() < (_left_frame_period/2.0))
-    {
-        imagePair[0].time = imagePair[0].first.time;
-
+    if (moving)
+    { 
+        Eigen::Affine3d tf; /** Transformer transformation **/
+        imagePair[0].first.time = left_frame_sample->time; //time of the left image
+    
       //  #ifdef DEBUG_PRINTS
-       // std::cout<< "[VISO2 LEFT_FRAME] [ON] ("<<diffTime.toMicroseconds()<<")\n";
-   //     #endif
+        //RTT::log(RTT::Warning) << "[VISO2 LEFT_FRAME] Frame arrived at: " <<left_frame_sample->time.toMicroseconds()<< RTT::endlog();
+        //std::cout << "[VISO2 LEFT_FRAME] Frame arrived at: " <<left_frame_sample->time.toString()<< std::endl;
+     //   #endif
+    
+        /** Get the transformation (transformation) Tbody_left_camera which is body = Tbody_left_camera left_camera **/
+        if (_body_frame.value().compare(_left_camera_viso2_frame.value()) == 0)
+        {
+            tf.setIdentity();
+            std::cout << "[VISO2] [WARNING]: transformation for left camera to body set to identity." << std::endl;
+        }
+        else if (!_left_camera_viso22body.get(ts, tf, false))
+        {
+            throw std::runtime_error("[VISO2] [FATAL ERROR]: transformation for transformer not found.");
+            return;
+        }
+    
+        /** The image need to be in gray scale and undistorted **/
+        imagePair[0].first.init(left_frame_sample->size.width, left_frame_sample->size.height, left_frame_sample->getDataDepth(), base::samples::frame::MODE_GRAYSCALE);
+        frameHelperLeft.convert (*left_frame_sample, imagePair[0].first, 0, 0, _resize_algorithm.value(), true);
+    
+        /** Left color image **/
+    //    leftColorImage.init(left_frame_sample->size.width, left_frame_sample->size.height, left_frame_sample->getDataDepth(), base::samples::frame::MODE_RGB);
+    //    frameHelperLeft.convert (*left_frame_sample, leftColorImage, 0, 0, _resize_algorithm.value(), true);
+    
+        /** Check the time difference between inertial sensors and joint samples **/
+        base::Time diffTime = imagePair[0].first.time - imagePair[0].second.time;
+    
+        /** If the difference in time is less than half of a period run the odometry **/
+        if (diffTime.toSeconds() < (_left_frame_period/2.0))
+        {
+            imagePair[0].time = imagePair[0].first.time;
+    
+          //  #ifdef DEBUG_PRINTS
+           // std::cout<< "[VISO2 LEFT_FRAME] [ON] ("<<diffTime.toMicroseconds()<<")\n";
+       //     #endif
+            std::clock_t begin = std::clock();
 
-        std::clock_t begin = std::clock();
+            viso2::Viso2Info viso2_info = this->computeStereoOdometer(ts, tf);
 
-        viso2::Viso2Info viso2_info = this->computeStereoOdometer(ts, tf);
+            std::clock_t end = std::clock();
+            viso2_info.compute_time = ::base::Time::fromSeconds(static_cast<double>(end - begin) / CLOCKS_PER_SEC);
+            #ifdef DEBUG_PRINTS
+            std::cout<<"Visual odometry in :"<< viso2_info.compute_time.toSeconds()<<"[seconds]\n";
+            #endif
 
-        std::clock_t end = std::clock();
-        viso2_info.compute_time = ::base::Time::fromSeconds(static_cast<double>(end - begin) / CLOCKS_PER_SEC);
-        #ifdef DEBUG_PRINTS
-        std::cout<<"Visual odometry in :"<< viso2_info.compute_time.toSeconds()<<"[seconds]\n";
-        #endif
-
-        _viso2_info.write(viso2_info);
+            _viso2_info.write(viso2_info);
+        }
     }
 
     return;
@@ -86,51 +106,72 @@ void StereoOdometer::left_frameTransformerCallback(const base::Time &ts, const :
 
 void StereoOdometer::right_frameTransformerCallback(const base::Time &ts, const ::RTT::extras::ReadOnlyPointer< ::base::samples::frame::Frame > &right_frame_sample)
 {
-    Eigen::Affine3d tf; /** Transformer transformation **/
-    imagePair[0].second.time = right_frame_sample->time; //time stamp for the right image
-
-   // #ifdef DEBUG_PRINTS
-    //RTT::log(RTT::Warning) << "[VISO2 RIGHT_FRAME] Frame arrived at: " <<right_frame_sample->time.toMicroseconds()<< RTT::endlog();
-    //std::cout<< "[VISO2 RIGHT_FRAME] Frame arrived at: " <<right_frame_sample->time.toString()<<std::endl;
- //   #endif
-
-    /** Get the transformation (transformation) Tbody_left_camera which is body = Tbody_left_camera left_camera **/
-    if (_body_frame.value().compare(_left_camera_viso2_frame.value()) == 0)
+    if (_motion_command.connected())
     {
-        tf.setIdentity();
+        if (_motion_command.read(motion_command) == RTT::NewData)
+        {
+            if ((motion_command.translation == 0.0) && (motion_command.rotation == 0.0))
+            {
+                moving = false;
+                std::cout << " StereoOdometer -> Robot not moving" << std::endl;
+            }
+            else
+                moving = true;
+        }
     }
-    else if (!_left_camera_viso22body.get(ts, tf, false))
+    else
     {
-        throw std::runtime_error("[VISO2] [FATAL ERROR]: transformation for transformer not found.");
-        return;
+        moving=true;
     }
-
-    /** Correct distortion in image right **/
-    imagePair[0].second.init(right_frame_sample->size.width, right_frame_sample->size.height, right_frame_sample->getDataDepth(), base::samples::frame::MODE_GRAYSCALE);
-    frameHelperRight.convert (*right_frame_sample, imagePair[0].second, 0, 0, _resize_algorithm.value(), true);
-
-    /** Check the time difference between inertial sensors and joint samples **/
-    base::Time diffTime = imagePair[0].second.time - imagePair[0].first.time;
-
-    /** If the difference in time is less than half of a period run the odometry **/
-    if (diffTime.toSeconds() < (_right_frame_period/2.0))
+    if (moving)
     {
-        imagePair[0].time = imagePair[0].second.time;
-
+        Eigen::Affine3d tf; /** Transformer transformation **/
+        imagePair[0].second.time = right_frame_sample->time; //time stamp for the right image
+    
        // #ifdef DEBUG_PRINTS
-      //  std::cout<< "[VISO2 RIGHT_FRAME] [ON] ("<<diffTime.toMicroseconds()<< " " << _right_frame_period << ")\n";
-      //  #endif
-        std::clock_t begin = std::clock();
-
-        viso2::Viso2Info viso2_info = this->computeStereoOdometer(ts, tf);
-
-        std::clock_t end = std::clock();
-        viso2_info.compute_time = ::base::Time::fromSeconds(static_cast<double>(end - begin) / CLOCKS_PER_SEC);
-        #ifdef DEBUG_PRINTS
-        std::cout<<"Visual odometry in :"<< viso2_info.compute_time.toSeconds()<<"[seconds]\n";
-        #endif
-
-        _viso2_info.write(viso2_info);
+        //RTT::log(RTT::Warning) << "[VISO2 RIGHT_FRAME] Frame arrived at: " <<right_frame_sample->time.toMicroseconds()<< RTT::endlog();
+        //std::cout<< "[VISO2 RIGHT_FRAME] Frame arrived at: " <<right_frame_sample->time.toString()<<std::endl;
+     //   #endif
+    
+        /** Get the transformation (transformation) Tbody_left_camera which is body = Tbody_left_camera left_camera **/
+        if (_body_frame.value().compare(_left_camera_viso2_frame.value()) == 0)
+        {
+            tf.setIdentity();
+            std::cout << "[VISO2] [WARNING]: transformation for right camera to body set to identity." << std::endl;
+        }
+        else if (!_left_camera_viso22body.get(ts, tf, false))
+        {
+            throw std::runtime_error("[VISO2] [FATAL ERROR]: transformation for transformer not found.");
+            return;
+        }
+    
+        /** Correct distortion in image right **/
+        imagePair[0].second.init(right_frame_sample->size.width, right_frame_sample->size.height, right_frame_sample->getDataDepth(), base::samples::frame::MODE_GRAYSCALE);
+        frameHelperRight.convert (*right_frame_sample, imagePair[0].second, 0, 0, _resize_algorithm.value(), true);
+    
+        /** Check the time difference between inertial sensors and joint samples **/
+        base::Time diffTime = imagePair[0].second.time - imagePair[0].first.time;
+    
+        /** If the difference in time is less than half of a period run the odometry **/
+        if (diffTime.toSeconds() < (_right_frame_period/2.0))
+        {
+            imagePair[0].time = imagePair[0].second.time;
+    
+           // #ifdef DEBUG_PRINTS
+          //  std::cout<< "[VISO2 RIGHT_FRAME] [ON] ("<<diffTime.toMicroseconds()<< " " << _right_frame_period << ")\n";
+          //  #endif
+            std::clock_t begin = std::clock();
+    
+            viso2::Viso2Info viso2_info = this->computeStereoOdometer(ts, tf);
+    
+            std::clock_t end = std::clock();
+            viso2_info.compute_time = ::base::Time::fromSeconds(static_cast<double>(end - begin) / CLOCKS_PER_SEC);
+            #ifdef DEBUG_PRINTS
+            std::cout<<"Visual odometry in :"<< viso2_info.compute_time.toSeconds()<<"[seconds]\n";
+            #endif
+    
+            _viso2_info.write(viso2_info);
+        }
     }
 
     return;
@@ -215,6 +256,8 @@ bool StereoOdometer::configureHook()
 
     /** Hash Table of indexes **/
     hashPointcloud.set_capacity(DEFAULT_CIRCULAR_BUFFER_SIZE);
+
+    moving = false;
 
     return true;
 }
@@ -344,7 +387,7 @@ viso2::Viso2Info StereoOdometer::computeStereoOdometer(const base::Time &ts, con
         }
 
         /** Create the point cloud from the current pair **/
-        this->createPointCloud(tf, leftColorImage, viso->getMatches(),
+        this->createPointCloud(tf, imagePair[0].first, viso->getMatches(),
                             viso->getInlierIndices(), Q, deltaPose, hashIdx, hashPointcloud);
 
         /** Re-arrange the point cloud and compute the uncertainty **/

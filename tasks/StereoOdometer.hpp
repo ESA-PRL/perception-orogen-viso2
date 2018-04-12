@@ -103,6 +103,9 @@ namespace viso2 {
         boost::circular_buffer< std::map < int32_t, HashPoint, std::less<int32_t>,
         Eigen::aligned_allocator< std::pair < const int32_t, HashPoint > > > > hashPointcloud; /** Circular buffer of hash Point Cloud **/
 
+        ::base::commands::Motion2D motion_command;
+        bool moving;
+
         /***************************/
         /** Output Port Variables **/
         /***************************/
