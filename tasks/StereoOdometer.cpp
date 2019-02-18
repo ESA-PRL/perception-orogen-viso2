@@ -2,8 +2,6 @@
 
 #include "StereoOdometer.hpp"
 
-//#define DEBUG_PRINTS 1
-
 #ifndef D2R
 #define D2R M_PI/180.00 /** Convert degree to radian **/
 #endif
@@ -36,7 +34,7 @@ void StereoOdometer::left_frameTransformerCallback(const base::Time &ts, const :
             if ((motion_command.translation == 0.0) && (motion_command.rotation == 0.0))
             {
                 moving = false;
-                std::cout << " StereoOdometer -> Robot not moving" << std::endl;
+                LOG_DEBUG_S << " StereoOdometer -> Robot not moving";
             }
             else
                 moving = true;
@@ -47,55 +45,50 @@ void StereoOdometer::left_frameTransformerCallback(const base::Time &ts, const :
         moving=true;
     }
     if (moving)
-    { 
+    {
         Eigen::Affine3d tf; /** Transformer transformation **/
         imagePair[0].first.time = left_frame_sample->time; //time of the left image
-    
-      //  #ifdef DEBUG_PRINTS
+
         //RTT::log(RTT::Warning) << "[VISO2 LEFT_FRAME] Frame arrived at: " <<left_frame_sample->time.toMicroseconds()<< RTT::endlog();
-        //std::cout << "[VISO2 LEFT_FRAME] Frame arrived at: " <<left_frame_sample->time.toString()<< std::endl;
-     //   #endif
-    
+        //LOG_DEBUG_S << "[VISO2 LEFT_FRAME] Frame arrived at: " <<left_frame_sample->time.toString()<< std::endl;
+
         /** Get the transformation (transformation) Tbody_left_camera which is body = Tbody_left_camera left_camera **/
         if (_body_frame.value().compare(_left_camera_viso2_frame.value()) == 0)
         {
             tf.setIdentity();
-            std::cout << "[VISO2] [WARNING]: transformation for left camera to body set to identity." << std::endl;
+            LOG_DEBUG_S << "[VISO2] [WARNING]: transformation for left camera to body set to identity.";
         }
         else if (!_left_camera_viso22body.get(ts, tf, false))
         {
             throw std::runtime_error("[VISO2] [FATAL ERROR]: transformation for transformer not found.");
             return;
         }
-    
+
         /** The image need to be in gray scale and undistorted **/
         imagePair[0].first.init(left_frame_sample->size.width, left_frame_sample->size.height, left_frame_sample->getDataDepth(), base::samples::frame::MODE_GRAYSCALE);
         frameHelperLeft.convert (*left_frame_sample, imagePair[0].first, 0, 0, _resize_algorithm.value(), true);
-    
+
         /** Left color image **/
     //    leftColorImage.init(left_frame_sample->size.width, left_frame_sample->size.height, left_frame_sample->getDataDepth(), base::samples::frame::MODE_RGB);
     //    frameHelperLeft.convert (*left_frame_sample, leftColorImage, 0, 0, _resize_algorithm.value(), true);
-    
+
         /** Check the time difference between inertial sensors and joint samples **/
         base::Time diffTime = imagePair[0].first.time - imagePair[0].second.time;
-    
+
         /** If the difference in time is less than half of a period run the odometry **/
         if (diffTime.toSeconds() < (_left_frame_period/2.0))
         {
             imagePair[0].time = imagePair[0].first.time;
-    
-          //  #ifdef DEBUG_PRINTS
-           // std::cout<< "[VISO2 LEFT_FRAME] [ON] ("<<diffTime.toMicroseconds()<<")\n";
-       //     #endif
+
+           // LOG_DEBUG_S<< "[VISO2 LEFT_FRAME] [ON] ("<<diffTime.toMicroseconds()<<")";
+
             std::clock_t begin = std::clock();
 
             viso2::Viso2Info viso2_info = this->computeStereoOdometer(ts, tf);
 
             std::clock_t end = std::clock();
             viso2_info.compute_time = ::base::Time::fromSeconds(static_cast<double>(end - begin) / CLOCKS_PER_SEC);
-            #ifdef DEBUG_PRINTS
-            std::cout<<"Visual odometry in :"<< viso2_info.compute_time.toSeconds()<<"[seconds]\n";
-            #endif
+            LOG_DEBUG_S << "Visual odometry in :"<< viso2_info.compute_time.toSeconds()<<"[seconds]";
 
             _viso2_info.write(viso2_info);
         }
@@ -113,7 +106,7 @@ void StereoOdometer::right_frameTransformerCallback(const base::Time &ts, const 
             if ((motion_command.translation == 0.0) && (motion_command.rotation == 0.0))
             {
                 moving = false;
-                std::cout << " StereoOdometer -> Robot not moving" << std::endl;
+                LOG_DEBUG_S << " StereoOdometer -> Robot not moving";
             }
             else
                 moving = true;
@@ -127,49 +120,48 @@ void StereoOdometer::right_frameTransformerCallback(const base::Time &ts, const 
     {
         Eigen::Affine3d tf; /** Transformer transformation **/
         imagePair[0].second.time = right_frame_sample->time; //time stamp for the right image
-    
-       // #ifdef DEBUG_PRINTS
+
         //RTT::log(RTT::Warning) << "[VISO2 RIGHT_FRAME] Frame arrived at: " <<right_frame_sample->time.toMicroseconds()<< RTT::endlog();
-        //std::cout<< "[VISO2 RIGHT_FRAME] Frame arrived at: " <<right_frame_sample->time.toString()<<std::endl;
+        //LOG_DEBUG_S<< "[VISO2 RIGHT_FRAME] Frame arrived at: " <<right_frame_sample->time.toString()<<std::endl;
      //   #endif
-    
+
         /** Get the transformation (transformation) Tbody_left_camera which is body = Tbody_left_camera left_camera **/
         if (_body_frame.value().compare(_left_camera_viso2_frame.value()) == 0)
         {
             tf.setIdentity();
-            std::cout << "[VISO2] [WARNING]: transformation for right camera to body set to identity." << std::endl;
+            LOG_DEBUG_S << "[VISO2] [WARNING]: transformation for right camera to body set to identity.";
         }
         else if (!_left_camera_viso22body.get(ts, tf, false))
         {
             throw std::runtime_error("[VISO2] [FATAL ERROR]: transformation for transformer not found.");
             return;
         }
-    
+
         /** Correct distortion in image right **/
-        imagePair[0].second.init(right_frame_sample->size.width, right_frame_sample->size.height, right_frame_sample->getDataDepth(), base::samples::frame::MODE_GRAYSCALE);
+        imagePair[0].second.init(right_frame_sample->size.width,
+                                right_frame_sample->size.height,
+                                right_frame_sample->getDataDepth(),
+                                base::samples::frame::MODE_GRAYSCALE);
         frameHelperRight.convert (*right_frame_sample, imagePair[0].second, 0, 0, _resize_algorithm.value(), true);
-    
+
         /** Check the time difference between inertial sensors and joint samples **/
         base::Time diffTime = imagePair[0].second.time - imagePair[0].first.time;
-    
+
         /** If the difference in time is less than half of a period run the odometry **/
         if (diffTime.toSeconds() < (_right_frame_period/2.0))
         {
             imagePair[0].time = imagePair[0].second.time;
-    
-           // #ifdef DEBUG_PRINTS
-          //  std::cout<< "[VISO2 RIGHT_FRAME] [ON] ("<<diffTime.toMicroseconds()<< " " << _right_frame_period << ")\n";
+
+          //  LOG_DEBUG_S<< "[VISO2 RIGHT_FRAME] [ON] ("<<diffTime.toMicroseconds()<< " " << _right_frame_period << ")";
           //  #endif
             std::clock_t begin = std::clock();
-    
+
             viso2::Viso2Info viso2_info = this->computeStereoOdometer(ts, tf);
-    
+
             std::clock_t end = std::clock();
             viso2_info.compute_time = ::base::Time::fromSeconds(static_cast<double>(end - begin) / CLOCKS_PER_SEC);
-            #ifdef DEBUG_PRINTS
-            std::cout<<"Visual odometry in :"<< viso2_info.compute_time.toSeconds()<<"[seconds]\n";
-            #endif
-    
+            LOG_DEBUG_S << "Visual odometry in :"<< viso2_info.compute_time.toSeconds()<<"[seconds]";
+
             _viso2_info.write(viso2_info);
         }
     }
@@ -207,9 +199,7 @@ bool StereoOdometer::configureHook()
     cameracalibCv.initCv();
     cv::cv2eigen(cameracalibCv.Q, Q);
 
-    #ifdef DEBUG_PRINTS
-    std::cout<< "[VISO2 CONFIGURATION] Q re-projection matrix:\n "<<Q<<"\n";
-    #endif
+    LOG_DEBUG_S << "[VISO2 CONFIGURATION] Q re-projection matrix:\n "<<Q;
 
     /** Image plane uncertainty(variance) in pixel **/
     //pxleftVar << pow(cameracalib.camLeft.pixel_error[0],2), 0.00,
@@ -221,10 +211,8 @@ bool StereoOdometer::configureHook()
     pxleftVar = cameracalib.camLeft.getPixelCovariance();
     pxrightVar = cameracalib.camRight.getPixelCovariance();
 
-    #ifdef DEBUG_PRINTS
-    std::cout<< "[VISO2 CONFIGURATION] Left Frame Error matrix:\n "<<pxleftVar<<"\n";
-    std::cout<< "[VISO2 CONFIGURATION] Right Frame Error matrix:\n "<<pxrightVar<<"\n";
-    #endif
+    LOG_DEBUG_S << "[VISO2 CONFIGURATION] Left Frame Error matrix:\n "<<pxleftVar;
+    LOG_DEBUG_S << "[VISO2 CONFIGURATION] Right Frame Error matrix:\n "<<pxrightVar;
 
     /** Initialize variables **/
     viso.reset(new VisualOdometryStereo(viso2param));
@@ -337,10 +325,10 @@ viso2::Viso2Info StereoOdometer::computeStereoOdometer(const base::Time &ts, con
         viso2_info.ratio_inliers = (100.0*viso2_info.num_inliers/viso2_info.num_matches);
 
         #ifdef DEBUG_PRINTS
-        std::cout << ", Matches: " << viso2_info.num_matches;
-        std::cout << ", Inliers: " << viso2_info.num_inliers;
-        std::cout << ", Inliers Ratio: " << viso2_info.ratio_inliers << " %" << ", Current pose: " << std::endl;
-        std::cout << pose.matrix() << std::endl << std::endl;
+        LOG_DEBUG_S << ", Matches: " << viso2_info.num_matches;
+        LOG_DEBUG_S << ", Inliers: " << viso2_info.num_inliers;
+        LOG_DEBUG_S << ", Inliers Ratio: " << viso2_info.ratio_inliers << " %" << ", Current pose: ";
+        LOG_DEBUG_S << pose.matrix();
         #endif
 
         /** Store in RigidBodyState to port out the pose **/
@@ -348,15 +336,14 @@ viso2::Viso2Info StereoOdometer::computeStereoOdometer(const base::Time &ts, con
         poseOut.time = imagePair[0].time;
         poseOut.orientation = attitude;
         poseOut.position = pose.translation();
-        #ifdef DEBUG_PRINTS
-        std::cout << "Orientation (Quaternion): "<< attitude.w()<<","<<attitude.x()<<","<<attitude.y()<<","<<attitude.z()<<"\n";
+
+        LOG_DEBUG_S << "Orientation (Quaternion): "<< attitude.w()<<","<<attitude.x()<<","<<attitude.y()<<","<<attitude.z();
         Eigen::Vector3d euler; /** In Euler angles **/
         euler[2] = attitude.toRotationMatrix().eulerAngles(2,1,0)[0];//YAW
         euler[1] = attitude.toRotationMatrix().eulerAngles(2,1,0)[1];//PITCH
         euler[0] = attitude.toRotationMatrix().eulerAngles(2,1,0)[2];//ROLL
-        std::cout<< "Roll: "<<euler[0]*R2D<<" Pitch: "<<euler[1]*R2D<<" Yaw: "<<euler[2]*R2D<<"\n";
-        std::cout << "Position:\n"<< poseOut.position<<"\n";
-        #endif
+        LOG_DEBUG_S << "Roll: "<<euler[0]*R2D<<" Pitch: "<<euler[1]*R2D<<" Yaw: "<<euler[2]*R2D;
+        LOG_DEBUG_S << "Position:\n"<< poseOut.position;
 
         /** Fill the delta pose out **/
         Eigen::Quaternion<double> deltaAttitude(deltaPose.rotation());
@@ -379,8 +366,8 @@ viso2::Viso2Info StereoOdometer::computeStereoOdometer(const base::Time &ts, con
             frame_ptr->time = imagePair[0].time;
             frame_out.reset(frame_ptr);
             #ifdef DEBUG_PRINTS
-            std::cout<<"frame_ptr: "<<frame_ptr<<"\n";
-            std::cout<<"frame size: "<<frame_ptr->size.width*frame_ptr->size.height<<"\n";
+            LOG_DEBUG_S << "frame_ptr: " << frame_ptr;
+            LOG_DEBUG_S << "frame size: " << frame_ptr->size.width*frame_ptr->size.height;
             #endif
             _frame_samples_out.write(frame_out);
 
@@ -405,13 +392,9 @@ viso2::Viso2Info StereoOdometer::computeStereoOdometer(const base::Time &ts, con
         _delta_pose_jacobians_k_m_out.write(deltaJacobCurr);
         _delta_pose_jacobians_k_out.write(deltaJacobPrev);
 
-        #ifdef DEBUG_PRINTS
-        std::cout<<"Jacobian Current is "<<deltaJacobCurr.rows()<<" x "<<deltaJacobCurr.cols()<<"\n";
-        std::cout<<"Jacobian Previous is "<<deltaJacobPrev.rows()<<" x "<<deltaJacobPrev.cols()<<"\n";
-        std::cout<<"Uncertainty is "<<pointsVar.size()<<"\n";
-        #endif
-
-
+        LOG_DEBUG_S << "Jacobian Current is "<<deltaJacobCurr.rows()<<" x "<<deltaJacobCurr.cols();
+        LOG_DEBUG_S << "Jacobian Previous is "<<deltaJacobPrev.rows()<<" x "<<deltaJacobPrev.cols();
+        LOG_DEBUG_S << "Uncertainty is "<<pointsVar.size();
     }
     else
     {
@@ -438,14 +421,14 @@ void StereoOdometer::drawMatches(const base::samples::frame::Frame &image1,
     keypoints2.resize(inlier_indices.size());
     cvMatches.resize(inlier_indices.size());
 
-    //std::cout<<"[drawMatches] number of features: "<<inlier_indices.size()<<"\n";
+    //LOG_DEBUG_S<<"[drawMatches] number of features: "<<inlier_indices.size();
 
     for (register std::size_t i = 0; i < inlier_indices.size(); ++i)
     {
         const Matcher::p_match& match = matches[inlier_indices[i]];
         #ifdef DEBUG_PRINTS
-       // std::cout<<"[drawMatches] match1 "<< match.u1c << " " << match.v1c<<"\n";
-       // std::cout<<"[drawMatches] match2 "<< match.u2c << " " << match.v2c<<"\n";
+       // LOG_DEBUG_S<<"[drawMatches] match1 "<< match.u1c << " " << match.v1c;
+       // LOG_DEBUG_S<<"[drawMatches] match2 "<< match.u2c << " " << match.v2c;
         #endif
         cv::KeyPoint k1 (static_cast<float>(match.u1c), static_cast<float>(match.v1c), 1);
         cv::KeyPoint k2 (static_cast<float>(match.u2c), static_cast<float>(match.v2c), 1);
@@ -481,8 +464,8 @@ void StereoOdometer::createDistanceImage(const base::samples::frame::Frame &imag
     std::fill(distImage.data.begin(), distImage.data.end(), base::unknown < base::samples::DistanceImage::scalar >());
     for (std::vector<Matcher::p_match>::const_iterator it = matches.begin() ; it != matches.end(); ++it)
     {
-        //std::cout<<"Index: "<<distImage.width*(it->v1c)+(it->u1c)<<"\n";
-        //std::cout<<"v1c: "<<it->v1c<<"u1c: "<< it->u1c <<"disparity: "<<it->u1c - it->u2c<<"\n";
+        //LOG_DEBUG_S<<"Index: "<<distImage.width*(it->v1c)+(it->u1c);
+        //LOG_DEBUG_S<<"v1c: "<<it->v1c<<"u1c: "<< it->u1c <<"disparity: "<<it->u1c - it->u2c;
         if ((it->v1c < distImage.height) && (it->u1c < distImage.width))
             distImage.data[distImage.width*(it->v1c)+(it->u1c)] = viso2param.base*viso2param.calib.f/(it->u1c - it->u2c);
 
@@ -517,13 +500,11 @@ void StereoOdometer::createPointCloud(const Eigen::Affine3d &tf,
         const Matcher::p_match& match = matches[inlier_indices[i]];
         HashPoint hashPoint;
 
-        #ifdef DEBUG_PRINTS
-        std::cout<<"****\n Match ["<<i<<"] Idx (current L): "<<match.i1c<<" (current R): "<<match.i2c <<"\n";
-        std::cout<<"Match ["<<i<<"] Idx (previous L): "<<match.i1p<<" (previous R): "<<match.i2p <<"\n";
-        #endif
+        LOG_DEBUG_S << "****\n Match ["<<i<<"] Idx (current L): "<<match.i1c<<" (current R): "<<match.i2c;
+        LOG_DEBUG_S << "Match ["<<i<<"] Idx (previous L): "<<match.i1p<<" (previous R): "<<match.i2p;
 
         /** 3D Point **/
-        //std::cout<<"image_point["<<i<<"] "<<match.u1c <<" "<<match.v1c<<"\n";
+        //LOG_DEBUG_S<<"image_point["<<i<<"] "<<match.u1c <<" "<<match.v1c;
         double disparity = match.u2c - match.u1c;
         base::Vector4d image_point (match.u1c, match.v1c, disparity, 1);
         base::Vector4d homogeneous_point = Q * image_point;
@@ -531,8 +512,8 @@ void StereoOdometer::createPointCloud(const Eigen::Affine3d &tf,
                                       homogeneous_point(1)/homogeneous_point(3),
                                       homogeneous_point(2)/homogeneous_point(3));
        // base::Vector2d point2d(point[0]/point[2], point[1]/point[2]);
-       // std::cout<<"point["<<i<<"] "<<point[0] <<" "<<point[1]<<" "<<point[2]<<"\n";
-       // std::cout<<"point2d["<<i<<"] "<<point2d[0] <<" "<<point2d[1]<<"\n";
+       // LOG_DEBUG_S<<"point["<<i<<"] "<<point[0] <<" "<<point[1]<<" "<<point[2];
+       // LOG_DEBUG_S<<"point2d["<<i<<"] "<<point2d[0] <<" "<<point2d[1];
 
         /** Point in the desired frame **/
         point = tf * point;
@@ -562,10 +543,8 @@ void StereoOdometer::createPointCloud(const Eigen::Affine3d &tf,
         /** Covariance in the desired frame **/
         hashPoint.cov = tf.rotation() * hashPoint.cov * tf.rotation().transpose();
 
-        #ifdef DEBUG_PRINTS
-        std::cout<<"Point:\n"<<hashPoint.point <<"\n";
-        std::cout<<"Point var:\n"<<hashPoint.cov <<"\n";
-        #endif
+        LOG_DEBUG_S << "Point:\n"<<hashPoint.point;
+        LOG_DEBUG_S << "Point var:\n"<<hashPoint.cov;
 
         /** Compute Jacobian **/
         hashPoint.jacobian = computeFeaturesJacobian (deltaPose, point);
@@ -652,9 +631,7 @@ base::Vector3d StereoOdometer::computeFeaturesJacobian (const Eigen::Affine3d &d
     /** Experimental **/
     Jcolumn = point - deltaPose * point;
 
-    #ifdef DEBUG_PRINTS
-    std::cout<< "J column dx: "<<Jcolumn[0]<<" dy: "<<Jcolumn[1]<<" dz: "<<Jcolumn[2]<<"\n";
-    #endif
+    LOG_DEBUG_S << "J column dx: "<<Jcolumn[0]<<" dy: "<<Jcolumn[1]<<" dz: "<<Jcolumn[2];
 
     return Jcolumn;
 }
@@ -670,10 +647,8 @@ void StereoOdometer::postProcessPointCloud (boost::unordered_map< int32_t, int32
 {
 
 
-    #ifdef DEBUG_PRINTS
-    std::cout<<"hashIdx has size: "<< hashIdx.size()<<"\n";
-    std::cout<<"hashPointcloud[0] has size: "<< hashPointcloud[0].size()<<"\n";
-    #endif
+    LOG_DEBUG_S << "hashIdx has size: "<< hashIdx.size();
+    LOG_DEBUG_S << "hashPointcloud[0] has size: "<< hashPointcloud[0].size();
 
     try
     {
@@ -708,11 +683,8 @@ void StereoOdometer::postProcessPointCloud (boost::unordered_map< int32_t, int32
         /** Get the idx on the previous point cloud **/
         int32_t prevIdx = hashIdx.at(it->first);
 
-        #ifdef DEBUG_PRINTS
-        std::cout<<"IDX["<<index<<"]: "<<it->first<<" -> "<<prevIdx<<"\n";
-        std::cout<<"POINT: "<<point.point[0]<<" "<<point.point[1]<<" "<<point.point[2]<<"\n";
-        #endif
-
+        LOG_DEBUG_S << "IDX["<<index<<"]: "<<it->first<<" -> "<<prevIdx;
+        LOG_DEBUG_S << "POINT: "<<point.point[0]<<" "<<point.point[1]<<" "<<point.point[2];
 
         if (hashPointcloud.size() >= 2.0)
         {
@@ -724,9 +696,7 @@ void StereoOdometer::postProcessPointCloud (boost::unordered_map< int32_t, int32
                 /** Get the point at the previous point cloud **/
                 HashPoint point_prev = hashPointcloud[1][prevIdx];
 
-                #ifdef DEBUG_PRINTS
-                std::cout<<"FOUND PREV: "<<point_prev.point[0]<<" "<<point_prev.point[1]<<" "<<point_prev.point[2]<<"\n";
-                #endif
+                LOG_DEBUG_S << "FOUND PREV: "<<point_prev.point[0]<<" "<<point_prev.point[1]<<" "<<point_prev.point[2];
 
                 /** Get the current Jacobian **/
                 deltaJacobCurr.col(index) = point.jacobian;
@@ -735,14 +705,12 @@ void StereoOdometer::postProcessPointCloud (boost::unordered_map< int32_t, int32
                 deltaJacobPrev.col(index) = point_prev.jacobian;
 
                 /** Vector of indexes **/
-               // std::cout<<"prev_idx "<< point_prev.idx<<" -> index "<< index <<"\n";
+               // LOG_DEBUG_S<<"prev_idx "<< point_prev.idx<<" -> index "<< index;
                 pointsIdx[point_prev.idx] = index;
             }
             else
             {
-                #ifdef DEBUG_PRINTS
-                std::cout<<"NOT FOUND\n";
-                #endif
+                //LOG_DEBUG_S<<"NOT FOUND\n";
 
                 /** Set the current Jacobian to Zero**/
                 deltaJacobCurr.col(index).setZero();
