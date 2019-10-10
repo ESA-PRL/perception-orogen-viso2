@@ -457,6 +457,54 @@ void StereoOdometer::drawMatches(const base::samples::frame::Frame &image1,
     return;
 }
 
+//----------------//
+//function to draw all the matches, not only the matches, on the current image
+//----------------//
+void StereoOdometer::drawAllMatches(const base::samples::frame::Frame &image1,
+                                    const base::samples::frame::Frame &image2,
+                                    const std::vector<Matcher::p_match> &matches,
+                                    base::samples::frame::Frame &imageOutput)
+{
+    ::cv::Mat cvImage1 = frameHelperLeft.convertToCvMat(image1);
+    ::cv::Mat cvImage2 = frameHelperRight.convertToCvMat(image2);
+    ::cv::Mat cvOutImg;
+    std::vector< cv::KeyPoint > keypoints1, keypoints2;
+    std::vector< cv::DMatch > cvMatches;
+
+    for (vector<Matcher::matches>::iterator it=matches.begin(); it!=matches.end(); it++)
+    {
+        //const Matcher::p_match& match = matches[inlier_indices[i]];
+        #ifdef DEBUG_PRINTS
+        // LOG_DEBUG_S<<"[drawMatches] match1 "<< match.u1c << " " << match.v1c;
+        // LOG_DEBUG_S<<"[drawMatches] match2 "<< match.u2c << " " << match.v2c;
+        #endif
+        //std::cout <<"[drawMatches] match1 "<< match.u1c << " " << match.v1c;
+        //std::cout <<"[drawMatches] match2 "<< match.u2c << " " << match.v2c;
+        //std::cout << std::endl;
+        //std::cout << std::endl;
+        cv::KeyPoint k1 (static_cast<float>(it->u1c), static_cast<float>(it->v1c), 1);
+        cv::KeyPoint k2 (static_cast<float>(it->u2c), static_cast<float>(it->v2c), 1);
+        float disparity = static_cast<float>(it->u1c) - static_cast<float>(it->u2c);
+        cv::DMatch cvMatch (i, i, disparity);
+        keypoints1[i] = k1;
+        keypoints2[i] = k2;
+        cvMatches[i] = cvMatch;
+    }
+
+    if (_image_ouput_type.get() == viso2::INTRA_MATCHES)
+    {
+        cv::drawMatches (cvImage1, keypoints1, cvImage2, keypoints2, cvMatches, cvOutImg);
+    }
+    else if (_image_ouput_type.get() == viso2::INTER_KEYPOINTS)
+    {
+        cv::drawKeypoints (cvImage1, keypoints1, cvOutImg, cv::Scalar(0, 255, 0));
+    }
+
+    frameHelperLeft.copyMatToFrame(cvOutImg, imageOutput);
+
+    return;
+}
+
 void StereoOdometer::createDistanceImage(const base::samples::frame::Frame &image1,
                         const base::samples::frame::Frame &image2,
                         const std::vector<Matcher::p_match> &matches,
