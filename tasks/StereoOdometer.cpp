@@ -430,6 +430,10 @@ void StereoOdometer::drawMatches(const base::samples::frame::Frame &image1,
        // LOG_DEBUG_S<<"[drawMatches] match1 "<< match.u1c << " " << match.v1c;
        // LOG_DEBUG_S<<"[drawMatches] match2 "<< match.u2c << " " << match.v2c;
         #endif
+        //std::cout <<"[drawMatches] match1 "<< match.u1c << " " << match.v1c;
+        //std::cout <<"[drawMatches] match2 "<< match.u2c << " " << match.v2c;
+        //std::cout << std::endl;
+        //std::cout << std::endl;
         cv::KeyPoint k1 (static_cast<float>(match.u1c), static_cast<float>(match.v1c), 1);
         cv::KeyPoint k2 (static_cast<float>(match.u2c), static_cast<float>(match.v2c), 1);
         float disparity = static_cast<float>(match.u1c) - static_cast<float>(match.u2c);

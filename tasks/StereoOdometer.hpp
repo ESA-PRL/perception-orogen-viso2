@@ -198,8 +198,9 @@ namespace viso2 {
          */
         viso2::Viso2Info computeStereoOdometer(const base::Time &ts, const Eigen::Affine3d &tf);
 
-        void drawMatches(const base::samples::frame::Frame &image1, const base::samples::frame::Frame &image2,
-                        const std::vector<Matcher::p_match> &matches, const std::vector<int32_t>& inlier_indices, base::samples::frame::Frame &imageOutput);
+        void drawMatches(const base::samples::frame::Frame &image1, const base::samples::frame::Frame &image2, const std::vector<Matcher::p_match> &matches, const std::vector<int32_t>& inlier_indices, base::samples::frame::Frame &imageOutput);
+
+        void drawAllMatches(const base::samples::frame::Frame &image1, const base::samples::frame::Frame &image2, const std::vector<Matcher::p_match> &matches, base::samples::frame::Frame &imageOutput);
 
         void createDistanceImage(const base::samples::frame::Frame &image1, const base::samples::frame::Frame &image2,
                         const std::vector<Matcher::p_match> &matches, const VisualOdometryStereo::parameters &viso2param,
