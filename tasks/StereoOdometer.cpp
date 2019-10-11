@@ -362,6 +362,7 @@ viso2::Viso2Info StereoOdometer::computeStereoOdometer(const base::Time &ts, con
             /** Draw matches in the images using the FrameHelper which internally uses openCV **/
             ::base::samples::frame::Frame *frame_ptr = frame_out.write_access();
             this->drawMatches (imagePair[0].first, imagePair[0].second, viso->getMatches(), viso->getInlierIndices(), *frame_ptr);
+            //this->drawAllMatches (imagePair[0].first, imagePair[0].second, viso->getMatches(), *frame_ptr);
 
             frame_ptr->time = imagePair[0].time;
             frame_out.reset(frame_ptr);
@@ -421,7 +422,8 @@ void StereoOdometer::drawMatches(const base::samples::frame::Frame &image1,
     keypoints2.resize(inlier_indices.size());
     cvMatches.resize(inlier_indices.size());
 
-    //LOG_DEBUG_S<<"[drawMatches] number of features: "<<inlier_indices.size();
+    std::cout <<"[drawMatches] n inliers: "<<inlier_indices.size() << std::endl;
+    std::cout <<"[drawMatches] n matches: "<<matches.size() << std::endl;
 
     for (register std::size_t i = 0; i < inlier_indices.size(); ++i)
     {
@@ -458,22 +460,25 @@ void StereoOdometer::drawMatches(const base::samples::frame::Frame &image1,
 }
 
 //----------------//
-//function to draw all the matches, not only the matches, on the current image
+//function to draw all the matches, not only the inliers, on the current image
 //----------------//
 void StereoOdometer::drawAllMatches(const base::samples::frame::Frame &image1,
                                     const base::samples::frame::Frame &image2,
                                     const std::vector<Matcher::p_match> &matches,
                                     base::samples::frame::Frame &imageOutput)
 {
+    
     ::cv::Mat cvImage1 = frameHelperLeft.convertToCvMat(image1);
     ::cv::Mat cvImage2 = frameHelperRight.convertToCvMat(image2);
     ::cv::Mat cvOutImg;
     std::vector< cv::KeyPoint > keypoints1, keypoints2;
     std::vector< cv::DMatch > cvMatches;
 
-    for (vector<Matcher::matches>::iterator it=matches.begin(); it!=matches.end(); it++)
+    //std::cout << "matches fcn=" << matches.size() << std::endl;
+
+    for (register std::size_t i = 0; i < matches.size(); ++i)
     {
-        //const Matcher::p_match& match = matches[inlier_indices[i]];
+        const Matcher::p_match& match = matches[i];
         #ifdef DEBUG_PRINTS
         // LOG_DEBUG_S<<"[drawMatches] match1 "<< match.u1c << " " << match.v1c;
         // LOG_DEBUG_S<<"[drawMatches] match2 "<< match.u2c << " " << match.v2c;
@@ -482,9 +487,9 @@ void StereoOdometer::drawAllMatches(const base::samples::frame::Frame &image1,
         //std::cout <<"[drawMatches] match2 "<< match.u2c << " " << match.v2c;
         //std::cout << std::endl;
         //std::cout << std::endl;
-        cv::KeyPoint k1 (static_cast<float>(it->u1c), static_cast<float>(it->v1c), 1);
-        cv::KeyPoint k2 (static_cast<float>(it->u2c), static_cast<float>(it->v2c), 1);
-        float disparity = static_cast<float>(it->u1c) - static_cast<float>(it->u2c);
+        cv::KeyPoint k1 (static_cast<float>(match.u1c), static_cast<float>(match.v1c), 1);
+        cv::KeyPoint k2 (static_cast<float>(match.u2c), static_cast<float>(match.v2c), 1);
+        float disparity = static_cast<float>(match.u1c) - static_cast<float>(match.u2c);
         cv::DMatch cvMatch (i, i, disparity);
         keypoints1[i] = k1;
         keypoints2[i] = k2;
