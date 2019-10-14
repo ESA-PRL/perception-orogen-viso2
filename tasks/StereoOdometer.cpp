@@ -34,6 +34,7 @@ void StereoOdometer::left_frameTransformerCallback(const base::Time &ts, const :
             if ((motion_command.translation == 0.0) && (motion_command.rotation == 0.0))
             {
                 moving = false;
+                std::cout << " StereoOdometer -> Robot not moving" << std::endl;
                 LOG_DEBUG_S << " StereoOdometer -> Robot not moving";
             }
             else
@@ -44,8 +45,9 @@ void StereoOdometer::left_frameTransformerCallback(const base::Time &ts, const :
     {
         moving=true;
     }
-    if (moving)
-    {
+    //moving = true;
+    //if (moving)
+    //{
         Eigen::Affine3d tf; /** Transformer transformation **/
         imagePair[0].first.time = left_frame_sample->time; //time of the left image
 
@@ -76,7 +78,8 @@ void StereoOdometer::left_frameTransformerCallback(const base::Time &ts, const :
         base::Time diffTime = imagePair[0].first.time - imagePair[0].second.time;
 
         /** If the difference in time is less than half of a period run the odometry **/
-        if (diffTime.toSeconds() < (_left_frame_period/2.0))
+        //if (diffTime.toSeconds() < (_left_frame_period/2.0))
+        if ((diffTime.toSeconds() < (_right_frame_period/2.0)) && moving)
         {
             imagePair[0].time = imagePair[0].first.time;
 
@@ -92,7 +95,7 @@ void StereoOdometer::left_frameTransformerCallback(const base::Time &ts, const :
 
             _viso2_info.write(viso2_info);
         }
-    }
+    //}
 
     return;
 }
@@ -116,8 +119,9 @@ void StereoOdometer::right_frameTransformerCallback(const base::Time &ts, const 
     {
         moving=true;
     }
-    if (moving)
-    {
+    //moving = true;
+    //if (moving)
+    //{
         Eigen::Affine3d tf; /** Transformer transformation **/
         imagePair[0].second.time = right_frame_sample->time; //time stamp for the right image
 
@@ -148,7 +152,7 @@ void StereoOdometer::right_frameTransformerCallback(const base::Time &ts, const 
         base::Time diffTime = imagePair[0].second.time - imagePair[0].first.time;
 
         /** If the difference in time is less than half of a period run the odometry **/
-        if (diffTime.toSeconds() < (_right_frame_period/2.0))
+        if ((diffTime.toSeconds() < (_right_frame_period/2.0)) && moving)
         {
             imagePair[0].time = imagePair[0].second.time;
 
@@ -164,7 +168,7 @@ void StereoOdometer::right_frameTransformerCallback(const base::Time &ts, const 
 
             _viso2_info.write(viso2_info);
         }
-    }
+    //}
 
     return;
 }
