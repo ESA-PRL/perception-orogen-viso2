@@ -27,6 +27,15 @@ StereoOdometer::~StereoOdometer()
 
 void StereoOdometer::left_frameTransformerCallback(const base::Time &ts, const ::RTT::extras::ReadOnlyPointer< ::base::samples::frame::Frame > &left_frame_sample)
 {
+    std::cout << "[Stereodom Task: right_callback] motion_command.connected()" 
+              << _motion_command.connected() << std::endl;
+    std::cout << "[Stereodom Task: right_callback] motion_command==RTT::NewData = " 
+              << (_motion_command.read(motion_command) == RTT::NewData) << std::endl;
+    std::cout << "[Stereodom Task: right_callback] motion_command.transl = " 
+              << motion_command.translation << std::endl;
+    std::cout << "[Stereodom Task: right_callback] motion_command.orient = "
+              << motion_command.rotation << std::endl;
+    
     if (_motion_command.connected())
     {
         if (_motion_command.read(motion_command) == RTT::NewData)
@@ -45,7 +54,9 @@ void StereoOdometer::left_frameTransformerCallback(const base::Time &ts, const :
     {
         moving=true;
     }
-    //moving = true;
+    moving = true;
+    
+    std::cout << "[Stereo Odom Task: left_callback] moving=" << moving << std::endl;
     //if (moving)
     //{
         Eigen::Affine3d tf; /** Transformer transformation **/
@@ -102,6 +113,15 @@ void StereoOdometer::left_frameTransformerCallback(const base::Time &ts, const :
 
 void StereoOdometer::right_frameTransformerCallback(const base::Time &ts, const ::RTT::extras::ReadOnlyPointer< ::base::samples::frame::Frame > &right_frame_sample)
 {
+    std::cout << "[Stereodom Task: right_callback] motion_command.connected()" 
+              << _motion_command.connected() << std::endl;
+    std::cout << "[Stereodom Task: right_callback] motion_command==RTT::NewData = " 
+              << (_motion_command.read(motion_command) == RTT::NewData) << std::endl;
+    std::cout << "[Stereodom Task: right_callback] motion_command.transl = " 
+              << motion_command.translation << std::endl;
+    std::cout << "[Stereodom Task: right_callback] motion_command.orient = "
+              << motion_command.rotation << std::endl;
+
     if (_motion_command.connected())
     {
         if (_motion_command.read(motion_command) == RTT::NewData)
@@ -119,7 +139,9 @@ void StereoOdometer::right_frameTransformerCallback(const base::Time &ts, const 
     {
         moving=true;
     }
-    //moving = true;
+    moving = true;
+    
+    std::cout << "[Stereo Odom Task: right_callback] moving=" << moving << std::endl; 
     //if (moving)
     //{
         Eigen::Affine3d tf; /** Transformer transformation **/
@@ -464,7 +486,7 @@ void StereoOdometer::drawMatches(const base::samples::frame::Frame &image1,
 }
 
 //----------------//
-//function to draw all the matches, not only the inliers, on the current image
+//function to draw all the matches, not only the inliers, on the current image pair
 //----------------//
 void StereoOdometer::drawAllMatches(const base::samples::frame::Frame &image1,
                                     const base::samples::frame::Frame &image2,
