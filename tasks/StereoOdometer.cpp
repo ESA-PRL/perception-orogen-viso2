@@ -27,14 +27,14 @@ StereoOdometer::~StereoOdometer()
 
 void StereoOdometer::left_frameTransformerCallback(const base::Time &ts, const ::RTT::extras::ReadOnlyPointer< ::base::samples::frame::Frame > &left_frame_sample)
 {
-    std::cout << "[Stereodom Task: right_callback] motion_command.connected()" 
-              << _motion_command.connected() << std::endl;
-    std::cout << "[Stereodom Task: right_callback] motion_command==RTT::NewData = " 
-              << (_motion_command.read(motion_command) == RTT::NewData) << std::endl;
-    std::cout << "[Stereodom Task: right_callback] motion_command.transl = " 
-              << motion_command.translation << std::endl;
-    std::cout << "[Stereodom Task: right_callback] motion_command.orient = "
-              << motion_command.rotation << std::endl;
+    //std::cout << "[Stereodom Task: right_callback] motion_command.connected()" 
+    //          << _motion_command.connected() << std::endl;
+    //std::cout << "[Stereodom Task: right_callback] motion_command==RTT::NewData = " 
+    //          << (_motion_command.read(motion_command) == RTT::NewData) << std::endl;
+    //std::cout << "[Stereodom Task: right_callback] motion_command.transl = " 
+    //          << motion_command.translation << std::endl;
+    //std::cout << "[Stereodom Task: right_callback] motion_command.orient = "
+    //          << motion_command.rotation << std::endl;
     
     if (_motion_command.connected())
     {
@@ -43,7 +43,7 @@ void StereoOdometer::left_frameTransformerCallback(const base::Time &ts, const :
             if ((motion_command.translation == 0.0) && (motion_command.rotation == 0.0))
             {
                 moving = false;
-                std::cout << " StereoOdometer -> Robot not moving" << std::endl;
+                //std::cout << " StereoOdometer -> Robot not moving" << std::endl;
                 LOG_DEBUG_S << " StereoOdometer -> Robot not moving";
             }
             else
@@ -56,7 +56,7 @@ void StereoOdometer::left_frameTransformerCallback(const base::Time &ts, const :
     }
     moving = true;
     
-    std::cout << "[Stereo Odom Task: left_callback] moving=" << moving << std::endl;
+    //std::cout << "[Stereo Odom Task: left_callback] moving=" << moving << std::endl;
     //if (moving)
     //{
         Eigen::Affine3d tf; /** Transformer transformation **/
@@ -113,14 +113,14 @@ void StereoOdometer::left_frameTransformerCallback(const base::Time &ts, const :
 
 void StereoOdometer::right_frameTransformerCallback(const base::Time &ts, const ::RTT::extras::ReadOnlyPointer< ::base::samples::frame::Frame > &right_frame_sample)
 {
-    std::cout << "[Stereodom Task: right_callback] motion_command.connected()" 
-              << _motion_command.connected() << std::endl;
-    std::cout << "[Stereodom Task: right_callback] motion_command==RTT::NewData = " 
-              << (_motion_command.read(motion_command) == RTT::NewData) << std::endl;
-    std::cout << "[Stereodom Task: right_callback] motion_command.transl = " 
-              << motion_command.translation << std::endl;
-    std::cout << "[Stereodom Task: right_callback] motion_command.orient = "
-              << motion_command.rotation << std::endl;
+    //std::cout << "[Stereodom Task: right_callback] motion_command.connected()" 
+    //          << _motion_command.connected() << std::endl;
+    //std::cout << "[Stereodom Task: right_callback] motion_command==RTT::NewData = " 
+    //          << (_motion_command.read(motion_command) == RTT::NewData) << std::endl;
+    //std::cout << "[Stereodom Task: right_callback] motion_command.transl = " 
+    //          << motion_command.translation << std::endl;
+    //std::cout << "[Stereodom Task: right_callback] motion_command.orient = "
+    //          << motion_command.rotation << std::endl;
 
     if (_motion_command.connected())
     {
@@ -141,7 +141,7 @@ void StereoOdometer::right_frameTransformerCallback(const base::Time &ts, const 
     }
     moving = true;
     
-    std::cout << "[Stereo Odom Task: right_callback] moving=" << moving << std::endl; 
+    //std::cout << "[Stereo Odom Task: right_callback] moving=" << moving << std::endl; 
     //if (moving)
     //{
         Eigen::Affine3d tf; /** Transformer transformation **/
@@ -200,12 +200,19 @@ void StereoOdometer::right_frameTransformerCallback(const base::Time &ts, const 
 
 bool StereoOdometer::configureHook()
 {
+    std::cout << "[viso2 task] start of configure hook" << std::endl;
+    
     if (! StereoOdometerBase::configureHook())
+    {
+        std::cout << "[viso2 task] if !configureHook" << std::endl;
         return false;
+    }
 
     /** Read the camera calibration parameters **/
     cameracalib = _calib_parameters.value();
 
+    std::cout << "[viso2 task] end of configure hook" << std::endl;
+    
     /** Read the dedicated viso2  parameter configuration values **/
     viso2param.ransac_iters = _viso2_parameters.value().ransac_iters;
     viso2param.inlier_threshold = _viso2_parameters.value().inlier_threshold;
@@ -213,18 +220,24 @@ bool StereoOdometer::configureHook()
     viso2param.match = _viso2_parameters.value().match;
     viso2param.bucket = _viso2_parameters.value().bucket;
 
+    std::cout << "[viso2 task] end of configure hook" << std::endl;
+    
     /** Set the calibration parameters in the viso2 type **/
     viso2param.base = cameracalib.extrinsic.tx; //baseline in meters
     viso2param.calib.f = 0.5*(cameracalib.camLeft.fx + cameracalib.camRight.fx);
     viso2param.calib.cu = 0.5*(cameracalib.camLeft.cx + cameracalib.camRight.cx);
     viso2param.calib.cv = 0.5*(cameracalib.camLeft.cy + cameracalib.camRight.cy);
 
+    std::cout << "[viso2 task] end of configure hook" << std::endl;
+    
     /** Re-projection Q matrix **/
     cameracalibCv.setCalibration(cameracalib);
     cameracalibCv.setImageSize(cv::Size(cameracalib.camLeft.width, cameracalib.camLeft.height));
     cameracalibCv.initCv();
     cv::cv2eigen(cameracalibCv.Q, Q);
 
+    std::cout << "[viso2 task] end of configure hook" << std::endl;
+    
     LOG_DEBUG_S << "[VISO2 CONFIGURATION] Q re-projection matrix:\n "<<Q;
 
     /** Image plane uncertainty(variance) in pixel **/
@@ -240,15 +253,23 @@ bool StereoOdometer::configureHook()
     LOG_DEBUG_S << "[VISO2 CONFIGURATION] Left Frame Error matrix:\n "<<pxleftVar;
     LOG_DEBUG_S << "[VISO2 CONFIGURATION] Right Frame Error matrix:\n "<<pxrightVar;
 
+    std::cout << "[viso2 task] end of configure hook" << std::endl;
+    
     /** Initialize variables **/
     viso.reset(new VisualOdometryStereo(viso2param));
 
+    std::cout << "[viso2 task] end of configure hook" << std::endl;
+    
     /** Frame Helper **/
     frameHelperLeft.setCalibrationParameter(cameracalib.camLeft);
     frameHelperRight.setCalibrationParameter(cameracalib.camRight);
 
+    std::cout << "[viso2 task] end of configure hook" << std::endl;
+    
     /** Initial pose initialization **/
     pose = Eigen::Affine3d::Identity();
+
+    std::cout << "[viso2 task] end of configure hook" << std::endl;
 
     /** Rigid body state output initialization **/
     poseOut.invalidate();
@@ -257,7 +278,9 @@ bool StereoOdometer::configureHook()
     poseOut.orientation = Eigen::Quaterniond(Eigen::Matrix3d::Identity());
     poseOut.position = Eigen::Vector3d::Zero();
     poseOut.velocity = Eigen::Vector3d::Zero();
-
+    
+    std::cout << "[viso2 task] end of configure hook" << std::endl;
+    
     /** Stereo working pair **/
     ::base::samples::frame::FramePair pair;
     imagePair.set_capacity(DEFAULT_CIRCULAR_BUFFER_SIZE);
@@ -272,7 +295,8 @@ bool StereoOdometer::configureHook()
     hashPointcloud.set_capacity(DEFAULT_CIRCULAR_BUFFER_SIZE);
 
     moving = false;
-
+    
+    std::cout << "[viso2 task] end of configure hook" << std::endl;
     return true;
 }
 
@@ -448,8 +472,8 @@ void StereoOdometer::drawMatches(const base::samples::frame::Frame &image1,
     keypoints2.resize(inlier_indices.size());
     cvMatches.resize(inlier_indices.size());
 
-    std::cout <<"[drawMatches] n inliers: "<<inlier_indices.size() << std::endl;
-    std::cout <<"[drawMatches] n matches: "<<matches.size() << std::endl;
+//    std::cout <<"[drawMatches] n inliers: "<<inlier_indices.size() << std::endl;
+  //  std::cout <<"[drawMatches] n matches: "<<matches.size() << std::endl;
 
     for (register std::size_t i = 0; i < inlier_indices.size(); ++i)
     {
