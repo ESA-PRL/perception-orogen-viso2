@@ -9,6 +9,7 @@
 #include <opencv/cv.h>
 #include <opencv2/core/core.hpp>
 #include <opencv2/core/eigen.hpp>
+#include <opencv2/features2d.hpp>
 #include <opencv/highgui.h>
 
 /** Rock libraries **/
