@@ -6,11 +6,9 @@
 #include "viso2/StereoOdometerBase.hpp"
 
 /** Opencv for the conversion **/
-#include <opencv/cv.h>
 #include <opencv2/core/core.hpp>
 #include <opencv2/core/eigen.hpp>
 #include <opencv2/features2d.hpp>
-#include <opencv/highgui.h>
 
 /** Rock libraries **/
 #include "frame_helper/FrameHelper.h" /** Rock lib for manipulate frames **/
